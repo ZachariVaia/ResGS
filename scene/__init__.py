@@ -15,7 +15,7 @@ import json
 from utils.system_utils import searchForMaxIteration
 from scene.dataset_readers import sceneLoadTypeCallbacks
 from scene.gaussian_model import GaussianModel
-from arguments import ModelParams
+from arguments.__init__ import ModelParams
 from utils.camera_utils import cameraList_from_camInfos, camera_to_JSON
 import cv2
 import torch
@@ -23,7 +23,7 @@ class Scene:
 
     gaussians : GaussianModel
 
-    def __init__(self, args : ModelParams, gaussians : GaussianModel, load_iteration=None, shuffle=True, resolution_scales=[2, 1, 0], resize_to_orig=False,
+    def __init__(self, args : ModelParams, gaussians : GaussianModel, load_iteration=None, shuffle=True, resolution_scales=[2, 1, 0],blur_levels= [2, 1, 0], resize_to_orig=False,
                  load_train = True, load_ply = False):
         """b
         :param path: Path to colmap scene main folder.
@@ -69,15 +69,26 @@ class Scene:
             random.shuffle(scene_info.test_cameras)  # Multi-res consistent random shuffling
 
         self.cameras_extent = scene_info.nerf_normalization["radius"]
-
+        self.blur_levels= blur_levels
+        
         print("Loading Training Cameras")
         if load_train:
-            self.train_cameras, _ = cameraList_from_camInfos(scene_info.train_cameras, resolution_scales, args, resize_to_original=resize_to_orig)
+            self.train_cameras= cameraList_from_camInfos(scene_info.train_cameras, resolution_scales,self.blur_levels, args, resize_to_original=resize_to_orig)
+                            
+            # Print the number of train cameras and their type
+            print(f"Number of training cameras: {len(self.train_cameras)}")
+            print(f"Type of train_cameras: {type(self.train_cameras)}")
 
+            # Print how many cameras are in each blur level
+            for i, blur_level_cameras in enumerate(self.train_cameras):
+                print(f"Number of cameras at blur level {i}: {len(blur_level_cameras)}")
         print("Loading Test Cameras")
-        self.test_cameras, _ = cameraList_from_camInfos(scene_info.test_cameras, resolution_scales, args, resize_to_original=resize_to_orig)
+        self.test_cameras= cameraList_from_camInfos(scene_info.test_cameras, resolution_scales,self.blur_levels, args, resize_to_original=resize_to_orig)
         self.cur_resolution = 0
+        self.cur_blur_level = 0
+        self.cur_pyramid_level = 0  
         self.resolution_scales=resolution_scales
+ 
         if self.loaded_iter:
             self.gaussians.load(os.path.join(self.model_path,
                                                            "point_cloud",
@@ -90,14 +101,32 @@ class Scene:
         point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))
         os.makedirs(point_cloud_path, exist_ok=True)
         self.gaussians.save(point_cloud_path, only_ply = only_ply)
-        #self.gaussians.save_mlp_checkpoints(point_cloud_path)
+        # self.gaussians.save_mlp_checkpoints(point_cloud_path)
 
-    def getTrainCameras(self):
+    def getTrainCameras_res(self):
         return self.train_cameras[self.cur_resolution]
     
-    def clear_image(self):
+    def getTrainCameras_pyramid_level(self):
+        return self.train_cameras[self.cur_pyramid_level]
+    
+    
+    
+    def clear_res_image(self):
         if self.cur_resolution-1>=0:
             self.train_cameras[self.cur_resolution-1] = None
+            torch.cuda.empty_cache()
+
+    def getTrainCameras_blur(self):
+        return self.train_cameras[self.cur_blur_level]  
+    
+    def clear_blur_image(self):
+        if self.cur_blur_level-1>=0:
+            self.train_cameras[self.cur_blur_level-1] = None
+            torch.cuda.empty_cache()
+
+    def clear_pyramid_level_image(self):
+        if self.cur_pyramid_level-1>=0:
+            self.train_cameras[self.cur_pyramid_level-1] = None
             torch.cuda.empty_cache()
     
     def getTestCamerasOrig(self):
@@ -105,18 +134,48 @@ class Scene:
     def getTrainCamerasOrig(self):
         return self.train_cameras[-1]
     
-    def getTestCameras(self):
+    def getTestCameras_res(self):
         return self.test_cameras[self.cur_resolution]
 
+     
+    def getTestCameras_blur(self):
+        return self.test_cameras[self.cur_resolution]
+    
+    def getTestCameras_pyramid_level(self):
+        return self.test_cameras[self.cur_pyramid_level]
+    
+    def up_one_pyramid_level(self):
+        if self.cur_pyramid_level + 1 < len(self.resolution_scales)*len(self.blur_levels):
+            self.cur_pyramid_level += 1
+
     def up_one_resolution(self):
-        if self.cur_resolution + 1 < len(self.resolution_scales):
+        if self.cur_resolution + 1 <  len(self.resolution_scales):
             self.cur_resolution += 1
 
+    def up_one_blur_level(self):
+        if self.cur_blur_level + 1 < len(self.blur_levels):
+            self.cur_blur_level += 1
     @property
     def get_cur_resolution(self):
-        return self.resolution_scales[self.cur_resolution]
+        return self.blur_levels[self.cur_blur_level]
+    
     @property
-    def isNotLastStage(self):
-        if self.cur_resolution != len(self.resolution_scales)-1:
+    def get_cur_blur_level(self):
+        return self.blur_levels[self.cur_blur_level]
+    
+    @property
+    def get_cur_pyramid_level(self):
+        return self.pyramid_levels[self.cur_pyramid_level]
+    
+    @property
+    def isNotLastBlurStage(self):
+        if self.cur_blur_level != len(self.cur_blur_level)-1:
             return True
         return False
+    
+    @property
+    def isNotLastResStage(self):
+        if self.cur_resolution!= len(self.cur_resolution)-1:
+            return True
+        return False
+    

@@ -477,12 +477,13 @@ class GaussianModel:
 
         self.reduce_opacity_with_mask(selected_pts_mask, opacity_reduce_weight = opacity_reduce_weight)
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation, new_level)
-
+        return new_xyz.shape[0]
 
 
     def adjust_gaussian(self, base_grad_threshold, update_value , min_opacity, cur_stage = 0, opacity_reduce_weight = 0.3, residual_split_scale_div = 1.6):
 
-        grads = self.xyz_gradient_accum_abs / self.denom
+        # grads = self.xyz_gradient_accum_abs / self.denom
+        grads = self.xyz_gradient_accum / self.denom
         grads[grads.isnan()] = 0
         grads_norm = torch.norm(grads, dim=-1)
     
@@ -493,7 +494,7 @@ class GaussianModel:
             cur_grad_thresh[level_mask] = cur_grad_thresh[level_mask] * torch.pow(base_pow, self._level[level_mask] - cur_stage)
         add_child_mask = (grads_norm >= cur_grad_thresh)
 
-        self.densify_residual_split(add_child_mask, opacity_reduce_weight = opacity_reduce_weight, residual_split_scale_div = residual_split_scale_div)
+        new_splits = self.densify_residual_split(add_child_mask, opacity_reduce_weight = opacity_reduce_weight, residual_split_scale_div = residual_split_scale_div)
         
         prune_pts_mask = torch.where(self.get_opacity < min_opacity, True, False)
         prune_pts_mask = prune_pts_mask.view(-1)
@@ -504,6 +505,7 @@ class GaussianModel:
         self.denom = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
         self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
         self.max_weight = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
+        return  new_splits
 
     def prune_opacity(self, min_opacity):
         prune_pts_mask = torch.where(self.get_opacity < min_opacity, True, False)
