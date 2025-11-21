@@ -34,6 +34,8 @@ from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
 from time import time
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
 # torch.set_num_threads(32)
 
 def savefiles(path):
@@ -160,8 +162,25 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
                 # densification
                 if is_densify_iter:
-                    gaussians.adjust_gaussian(opt.densify_grad_threshold, update_value,opt.min_opacity, cur_stage=cur_level
+                    new_splits = gaussians.adjust_gaussian(opt.densify_grad_threshold, update_value,opt.min_opacity, cur_stage=cur_level
                                               ,opacity_reduce_weight=opt.opacity_reduce_weight, residual_split_scale_div=opt.residual_split_scale_div)
+                    # Add new splits to the count
+                    split_count.append(new_splits)
+            # Warm up for new blur level
+            if iteration < opt.update_until and iteration > opt.start_stat and warm_up_iter != 0 and iteration % opt.update_interval == 0:
+                split_count.append(0)
+
+
+
+            if iteration == opt.update_until:
+                # Output folder for plots
+                output_folder = os.path.join(args.model_path, 'plots')  
+
+                os.makedirs(output_folder, exist_ok=True)
+
+                if iteration == opt.update_until:
+                    np.savetxt(os.path.join(output_folder, "split_count.txt"), split_count)
+
 
 
             if iteration in change_iter:
@@ -224,31 +243,111 @@ def get_logger(path):
     return logger
 
 def training_report(iteration, Ll1, loss, l1_loss, testing_iterations, scene : Scene, renderFunc, renderArgs, logger, lpips_fn):
-
+    # ----------------------------------------------------------------------
+    #                         TRAIN LOGGING
+    # ----------------------------------------------------------------------
+    if tb_writer:
+        tb_writer.add_scalar("train/L1", Ll1.item(), iteration)
+        tb_writer.add_scalar("train/Total_Loss", loss.item(), iteration)
+        tb_writer.add_scalar("train/Blur_Level", scene.cur_blur_level, iteration)
     # Report test and samples of training set
     if iteration in testing_iterations:
         torch.cuda.empty_cache()
         validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()},
                               {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
-        for config in validation_configs:
-            if config['cameras'] and len(config['cameras']) > 0:
-                l1_test = 0.0
-                psnr_test = 0.0
-                ssim_test=0.0
-                lpips_test=0.0
-                for idx, viewpoint in enumerate(config['cameras']):
-                    image = torch.clamp(renderFunc(viewpoint, scene.gaussians, *renderArgs)["render"], 0.0, 1.0)
-                    gt_image = torch.clamp(viewpoint.original_image.to("cuda"), 0.0, 1.0)
-                    l1_test += l1_loss(image, gt_image).mean().double()
-                    psnr_test += psnr(image, gt_image).mean().double()
-                    ssim_test += ssim(image, gt_image).mean().double()
-                    lpips_test += lpips_fn(image, gt_image).mean().double()
-                psnr_test /= len(config['cameras'])
-                l1_test /= len(config['cameras'])
-                ssim_test /= len(config['cameras'])
-                lpips_test /= len(config['cameras'])
-                logger.info("\n[ITER {}] Evaluating {}: L1 {} PSNR {} SSIM {} LPIPS {}".format(iteration, config['name'], l1_test, psnr_test, ssim_test, lpips_test))
+ 
+    # ----------------------------------------------------------------------
+    #                         TEST EVALUATION
+    # ----------------------------------------------------------------------
+    if iteration in testing_iterations:
+
         torch.cuda.empty_cache()
+
+        validation_configs = (
+            {
+                "name": "test",
+                "cameras": scene.getTestCameras_pyramid_level(),
+            },
+            {
+                "name": "train",
+                "cameras": [
+                    scene.getTrainCameras_pyramid_level()[i % len(scene.getTrainCameras_pyramid_level())]
+                    for i in range(5, 30, 5)
+                ],
+            },
+        )
+
+        for config in validation_configs:
+
+            cams = config["cameras"]
+            if not cams or len(cams) == 0:
+                continue
+
+            l1_sum = psnr_sum = ssim_sum = lpips_sum = 0.0
+
+            # Evaluate each camera
+            for idx, vp in enumerate(cams):
+
+                pkg = renderFunc(vp, scene.gaussians, pipe, background)
+                image = torch.clamp(pkg["render"], 0.0, 1.0)
+                gt = torch.clamp(vp.original_image.cuda(), 0.0, 1.0)
+
+                l1_val = l1_loss_fn(image, gt).mean().double()
+                psnr_val = psnr(image, gt).mean().double()
+                ssim_val = ssim(image, gt).mean().double()
+                lpips_val = lpips_fn(image, gt).mean().double()
+
+                l1_sum += l1_val
+                psnr_sum += psnr_val
+                ssim_sum += ssim_val
+                lpips_sum += lpips_val
+
+                # Log images (only first 3)
+                if tb_writer and idx < 3:
+                    tb_writer.add_images(
+                        f"{config['name']}/render_view_{vp.image_name}",
+                        image[None],
+                        iteration,
+                    )
+                    if iteration == testing_iterations[0]:
+                        tb_writer.add_images(
+                            f"{config['name']}/gt_view_{vp.image_name}",
+                            gt[None],
+                            iteration,
+                        )
+
+            n = len(cams)
+            l1_avg = l1_sum / n
+            psnr_avg = psnr_sum / n
+            ssim_avg = ssim_sum / n
+            lpips_avg = lpips_sum / n
+
+            logger.info(
+                f"[ITER {iteration}] {config['name']}:"
+                f" L1={l1_avg:.4f} PSNR={psnr_avg:.4f}"
+                f" SSIM={ssim_avg:.4f} LPIPS={lpips_avg:.4f}"
+            )
+
+            if tb_writer:
+                name = config["name"]
+                tb_writer.add_scalar(f"{name}/L1", l1_avg, iteration)
+                tb_writer.add_scalar(f"{name}/PSNR", psnr_avg, iteration)
+                tb_writer.add_scalar(f"{name}/SSIM", ssim_avg, iteration)
+                tb_writer.add_scalar(f"{name}/LPIPS", lpips_avg, iteration)
+
+        # ------------------------------------------------------------------
+        #              LOG GAUSSIAN PROPERTIES (GLOBAL)
+        # ------------------------------------------------------------------
+        if tb_writer:
+            tb_writer.add_histogram(
+                "gaussians/opacity", scene.gaussians.get_opacity, iteration
+            )
+            tb_writer.add_scalar(
+                "gaussians/count", scene.gaussians.get_xyz.shape[0], iteration
+            )
+
+        torch.cuda.empty_cache()
+
     return
 
 if __name__ == "__main__":
