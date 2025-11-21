@@ -33,6 +33,7 @@ from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
 from time import time
+import torch.nn.functional as F
 # torch.set_num_threads(32)
 
 def savefiles(path):
@@ -75,9 +76,9 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
     lpips_fn = lpips.LPIPS(net='vgg').to("cuda")
     _ = prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree)
-    scene = Scene(dataset, gaussians, shuffle=False, resolution_scales=opt.resolution_scales, resize_to_orig=opt.resize_to_original)
+ scene = Scene(dataset, gaussians, shuffle=False, blur_levels= opt.blur_levels, resolution_scales=[1.0], resize_to_orig=opt.resize_to_original)
     gaussians.training_setup(opt)
-    max_level = len(opt.resolution_scales)
+    max_level = len(opt.blur_levels)
 
     viewpoint_stack = None
     ema_loss_for_log = 0.0
@@ -164,20 +165,22 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
 
 
             if iteration in change_iter:
-                scene.up_one_resolution()
+                scene.up_one_blur_level()
                 warm_up_iter=opt.warm_up_iter
-                if scene.cur_resolution is not max_level-1:
-                    next_change_iter = change_iter[scene.cur_resolution]
-                    last_change_iter = change_iter[scene.cur_resolution-1] + warm_up_iter
+                if scene.cur_blur_level is not max_level-1:
+                    next_change_iter = change_iter[scene.cur_blur_level]
+                    last_change_iter = change_iter[scene.cur_blur_level-1] + warm_up_iter
                 else:
                     next_change_iter = opt.update_until
-                    last_change_iter = change_iter[scene.cur_resolution-1] + warm_up_iter
-                cur_level = opt.stage_split*(scene.cur_resolution) + 1
+                    last_change_iter = change_iter[scene.cur_blur_level-1] + warm_up_iter
+                #When to trigger substage transitions (change_split_level_iter)
+                cur_level = opt.stage_split*(scene.cur_blur_level) + 1
                 change_split_level_iter = get_change_split_iter(last_change_iter, next_change_iter, opt.stage_split)
                 viewpoint_stack = scene.getTrainCameras().copy()
                 scene.clear_image()
 
-            if  scene.cur_resolution!=0 and opt.use_opacity_reduce and iteration < opt.prune_until:
+
+            if  scene.cur_blur_level!=0 and opt.use_opacity_reduce and iteration < opt.prune_until:
                 if iteration % opt.opacity_reduce_interval == 0:
                     if iteration >= opt.update_until:
                         gaussians.prune_opacity(opt.min_opacity)

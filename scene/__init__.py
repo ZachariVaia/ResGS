@@ -23,7 +23,7 @@ class Scene:
 
     gaussians : GaussianModel
 
-    def __init__(self, args : ModelParams, gaussians : GaussianModel, load_iteration=None, shuffle=True, resolution_scales=[2, 1, 0], resize_to_orig=False,
+    def __init__(self, args : ModelParams, gaussians : GaussianModel, load_iteration=None, shuffle=True, blur_levels= [2, 1, 0], resolution_scales=[1.0],  resize_to_orig=False,
                  load_train = True, load_ply = False):
         """b
         :param path: Path to colmap scene main folder.
@@ -69,6 +69,7 @@ class Scene:
             random.shuffle(scene_info.test_cameras)  # Multi-res consistent random shuffling
 
         self.cameras_extent = scene_info.nerf_normalization["radius"]
+        self.blur_levels= blur_levels
 
         print("Loading Training Cameras")
         if load_train:
@@ -78,6 +79,9 @@ class Scene:
         self.test_cameras, _ = cameraList_from_camInfos(scene_info.test_cameras, resolution_scales, args, resize_to_original=resize_to_orig)
         self.cur_resolution = 0
         self.resolution_scales=resolution_scales
+
+        self.cur_blur_level = 0
+        
         if self.loaded_iter:
             self.gaussians.load(os.path.join(self.model_path,
                                                            "point_cloud",
@@ -93,11 +97,11 @@ class Scene:
         #self.gaussians.save_mlp_checkpoints(point_cloud_path)
 
     def getTrainCameras(self):
-        return self.train_cameras[self.cur_resolution]
+        return self.train_cameras[self.cur_blur_level]  
     
     def clear_image(self):
-        if self.cur_resolution-1>=0:
-            self.train_cameras[self.cur_resolution-1] = None
+        if self.cur_blur_level-1>=0:
+            self.train_cameras[self.cur_blur_level-1] = None
             torch.cuda.empty_cache()
     
     def getTestCamerasOrig(self):
@@ -105,18 +109,27 @@ class Scene:
     def getTrainCamerasOrig(self):
         return self.train_cameras[-1]
     
+      
     def getTestCameras(self):
-        return self.test_cameras[self.cur_resolution]
+        return self.test_cameras[self.cur_blur_level]
 
     def up_one_resolution(self):
         if self.cur_resolution + 1 < len(self.resolution_scales):
             self.cur_resolution += 1
 
+    def up_one_blur_level(self):
+        if self.cur_blur_level + 1 < len(self.blur_levels):
+            self.cur_blur_level += 1
+
     @property
     def get_cur_resolution(self):
-        return self.resolution_scales[self.cur_resolution]
+        return self.blur_levels[self.cur_blur_level]
+    
+    @property
+    def get_cur_blur_level(self):
+        return self.blur_levels[self.cur_blur_level]
     @property
     def isNotLastStage(self):
-        if self.cur_resolution != len(self.resolution_scales)-1:
+        if self.cur_blur_level != len(self.cur_blur_level)-1:
             return True
         return False

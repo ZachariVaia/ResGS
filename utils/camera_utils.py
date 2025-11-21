@@ -1,37 +1,39 @@
-#
-# Copyright (C) 2023, Inria
-# GRAPHDECO research group, https://team.inria.fr/graphdeco
-# All rights reserved.
-#
-# This software is free for non-commercial, research and evaluation use
-# under the terms of the LICENSE.md file.
-#
-# For inquiries contact  george.drettakis@inria.fr
-#
-
 from scene.cameras import Camera
 import numpy as np
 from utils.general_utils import PILtoTorch
 from utils.graphics_utils import fov2focal
 import torch
 import cv2 as cv
-
+import torch.nn.functional as F
+from PIL import Image
+import cv2
+import matplotlib.pyplot as plt
 WARNED = False
 
-def loadCam(args, id, cam_info, resolution_scales,resize_to_original=True):
+def gaussian_blur_cv2(img_chw, ks, sigma):
+    """
+    Gaussian blur μέσω OpenCV.
+    img_chw: torch.Tensor [C,H,W], τιμές 0–1
+    ks: odd kernel size, π.χ. 5, 7, 9
+    sigma: Gaussian sigma
+    """
+    C, H, W = img_chw.shape
+    img_np = img_chw.detach().cpu().permute(1, 2, 0).numpy()  # [H,W,C]
+    img_np = cv2.GaussianBlur(img_np, (ks, ks), sigma, borderType=cv2.BORDER_REFLECT)
+    img_blur = torch.from_numpy(img_np).permute(2, 0, 1).to(img_chw.device)
+    return img_blur
+
+def loadCam(args, id, cam_info, resolution_scale, blur_levels, resize_to_original=False):
     orig_w, orig_h = cam_info.image.size
 
     if args.resolution in [1, 2, 4, 8]:
         resolution = round(orig_w/(1.0 * args.resolution)), round(orig_h/(1.0 * args.resolution))
-        #print("Resolution: ", args.resolution)  
-        
-    else:  # should be a type that converts to float
+    else:  
         if args.resolution == -1:
             if orig_w > 1600:
                 global WARNED
                 if not WARNED:
-                    print("[ INFO ] Encountered quite large input images (>1.6K pixels width), rescaling to 1.6K.\n "
-                        "If this is not desired, please explicitly specify '--resolution/-r' as 1")
+                    print("[ INFO ] Rescaling to 1.6K because of large images.")
                     WARNED = True
                 global_down = orig_w / 1600
             else:
@@ -43,68 +45,66 @@ def loadCam(args, id, cam_info, resolution_scales,resize_to_original=True):
         resolution = (int(orig_w / scale), int(orig_h / scale))
 
     resized_image_rgb = PILtoTorch(cam_info.image, resolution)
-
     gt_image = resized_image_rgb[:3, ...]
     downed_image = gt_image.permute(1, 2, 0).cpu().numpy()
+
     image_pyramid = []
-    up_image_pyramid = []
-    last_size=None
-    size_list=[]
-    last_resolution=0
-    for i in range(resolution_scales[0] + 1):
-        if i in resolution_scales:
-            if resize_to_original:
-                uped_resized_image=downed_image
-                for j in range(1,i+1):
-                    cur_size=size_list[-j]
-                    uped_resized_image=cv.pyrUp(uped_resized_image,dstsize=(cur_size[1],cur_size[0]))
-                gt_image=torch.from_numpy(uped_resized_image).permute(2, 0, 1).float()
+   
+
+    # Apply blur for each level
+    for i in range(blur_levels[0] + 1):
+        if i in blur_levels:
+            if i == blur_levels[0]:  # Last resolution level (highest resolution)
+                # Do not apply any blur for the last resolution level
+                image_pyramid.append(Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T,
+                                         FoVx=cam_info.FovX, FoVy=cam_info.FovY,
+                                         image=torch.from_numpy(downed_image).permute(2, 0, 1).float(), gt_alpha_mask=None,
+                                         image_name=cam_info.image_name, uid=id, data_device=args.data_device))
             else:
-                gt_image = torch.from_numpy(downed_image).permute(2, 0, 1).float()
-            if i==0:
-                up_image_pyramid.append(None)
-            else:
-                if resize_to_original is False:
-                    uped_image=cv.pyrUp(downed_image,dstsize=(last_size[1],last_size[0]))
-                    for j in range(1,i-last_resolution):
-                        cur_size=size_list[-(j+1)]
-                        uped_image=cv.pyrUp(uped_image,dstsize=(cur_size[1],cur_size[0]))
-                else:
-                    uped_image=uped_resized_image
+                if i == 0:
+                    sigma = 4.0 #2.0
+                    kernel_size = 25 #13
+                elif i == 1:
+                    sigma = 2.0 #1.0
+                    kernel_size = 13 #7
 
-                uped_image_torch=torch.from_numpy(uped_image).permute(2, 0, 1).float().cuda()
-                up_image_pyramid.append(Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T,
-                  FoVx=cam_info.FovX, FoVy=cam_info.FovY,
-                  image=uped_image_torch, gt_alpha_mask=loaded_mask,
-                  image_name=cam_info.image_name, uid=id, data_device=args.data_device))
-            loaded_mask = None
-            image_pyramid.append(Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T,
-                  FoVx=cam_info.FovX, FoVy=cam_info.FovY,
-                  image=gt_image, gt_alpha_mask=loaded_mask,
-                  image_name=cam_info.image_name, uid=id, data_device=args.data_device))
-            last_resolution=i
-        last_size=downed_image.shape
-        size_list.append(last_size)
-        downed_image = cv.pyrDown(downed_image)
 
-    up_image_pyramid.reverse()
-    image_pyramid.reverse()
+    
+                # Apply Gaussian blur
+                blurred_image = gaussian_blur_cv2(torch.from_numpy(downed_image).permute(2, 0, 1).float(), ks=kernel_size, sigma=sigma)
 
-    return image_pyramid, up_image_pyramid
 
-def cameraList_from_camInfos(cam_infos, resolution_scales, args, resize_to_original=True):
+                image_pyramid.append(Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T,
+                                            FoVx=cam_info.FovX, FoVy=cam_info.FovY,
+                                            image=blurred_image, gt_alpha_mask=None,
+                                            image_name=cam_info.image_name, uid=id, data_device=args.data_device))
+
+
+            # if resize_to_original:
+            #     uped_resized_image = blurred_image.permute(1, 2, 0).cpu().numpy()
+            #     blurred_image = torch.from_numpy(uped_resized_image).permute(2, 0, 1).float()
+
+
+    # image_pyramid.reverse()
+
+    return image_pyramid
+
+
+
+
+
+def cameraList_from_camInfos(cam_infos, resolution_scale,blur_levels, args, resize_to_original=True):
     camera_list = []
-    pry_up_camera_list = []
-    for i in range(len(resolution_scales)):
+    for i in range(len(blur_levels)):
         camera_list.append([])
-        pry_up_camera_list.append([])
     for id, c in enumerate(cam_infos):
-        cam_pyramid, cam_up_pyramid = loadCam(args, id, c, resolution_scales,resize_to_original=resize_to_original)
-        for i in range(len(resolution_scales)):
+        cam_pyramid = loadCam(args, id, c, resolution_scale,blur_levels,resize_to_original=resize_to_original)
+        for i in range(len(blur_levels)):
             camera_list[i].append(cam_pyramid[i])
-            pry_up_camera_list[i].append(cam_up_pyramid[i])
+        
 
-    return camera_list, pry_up_camera_list
+    return camera_list
+
 
 def camera_to_JSON(id, camera : Camera):
     Rt = np.zeros((4, 4))
