@@ -1,0 +1,1 @@
+Namespace(sh_degree=3, source_path='/app/data/MipNeRF/bonsai', model_path='/app/output/opencv_25_13_3dgs_tb_2000_5000_camera_interval/bonsai', images='images_2', resolution=-1, white_background=False, data_device='cuda', eval=True)

@@ -71,17 +71,25 @@ class Scene:
         self.cameras_extent = scene_info.nerf_normalization["radius"]
         self.blur_levels= blur_levels
 
-        print("Loading Training Cameras")
-        if load_train:
-            self.train_cameras, _ = cameraList_from_camInfos(scene_info.train_cameras, resolution_scales, args, resize_to_original=resize_to_orig)
+        for resolution_scale in resolution_scales:
+            print("Loading Training Cameras")
+            if load_train:
+                self.train_cameras= cameraList_from_camInfos(scene_info.train_cameras, resolution_scale,self.blur_levels, args, resize_to_original=resize_to_orig)
+                                
+                # Print the number of train cameras and their type
+                print(f"Number of training cameras: {len(self.train_cameras)}")
+                print(f"Type of train_cameras: {type(self.train_cameras)}")
 
-        print("Loading Test Cameras")
-        self.test_cameras, _ = cameraList_from_camInfos(scene_info.test_cameras, resolution_scales, args, resize_to_original=resize_to_orig)
+                # Print how many cameras are in each blur level
+                for i, blur_level_cameras in enumerate(self.train_cameras):
+                    print(f"Number of cameras at blur level {i}: {len(blur_level_cameras)}")
+            print("Loading Test Cameras")
+            self.test_cameras= cameraList_from_camInfos(scene_info.test_cameras, resolution_scale,self.blur_levels, args, resize_to_original=resize_to_orig)
         self.cur_resolution = 0
         self.resolution_scales=resolution_scales
 
         self.cur_blur_level = 0
-        
+
         if self.loaded_iter:
             self.gaussians.load(os.path.join(self.model_path,
                                                            "point_cloud",
