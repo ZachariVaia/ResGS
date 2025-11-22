@@ -11,7 +11,9 @@ DATASET_PATH="${DATASET_PATH:-/home/vaia/ResGS/data}"
 SAVE_PATH="${SAVE_PATH:-/home/vaia/ResGS/output/blurgs_opencv_25_13_2500_6000_abs_tb_full_eval}"
 
 # ====== RUN DOCKER ======
-docker run -it --rm --gpus all \
+docker run -it --rm  \
+ --gpus all \
+ --env CUDA_VISIBLE_DEVICES=1 \
   -v /home/vaia/ResGS:/app \
   -v /home/vaia/ResGS/data:/app/data \
   -v /home/vaia/ResGS/output:/app/output \

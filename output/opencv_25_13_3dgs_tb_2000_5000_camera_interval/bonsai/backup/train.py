@@ -25,17 +25,17 @@ from random import randint
 from utils.loss_utils import l1_loss, ssim, l2_loss
 from gaussian_renderer import render, network_gui
 import sys
-from scene import Scene, GaussianModel
+from scene.__init__ import Scene, GaussianModel
 from utils.general_utils import safe_state
 import uuid
 from tqdm import tqdm
 from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
-from arguments import ModelParams, PipelineParams, OptimizationParams
+from arguments.__init__ import ModelParams, PipelineParams, OptimizationParams
 from time import time
-import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
+
 # torch.set_num_threads(32)
 
 def savefiles(path):
@@ -64,6 +64,7 @@ def prepare_output_and_logger(args):
     tb_writer = SummaryWriter(log_dir=os.path.join(args.model_path, "tb"))
     return tb_writer
 
+
 def loss_fn(image, gt_image, lambda_dssim):
     Ll1 = l1_loss(image, gt_image)
     ssim_loss = (1.0 - ssim(image, gt_image))
@@ -78,26 +79,80 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
     lpips_fn = lpips.LPIPS(net='vgg').to("cuda")
     tb_writer = prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree)
-    scene = Scene(dataset, gaussians, shuffle=False, blur_levels= opt.blur_levels, resolution_scales=[1.0], resize_to_orig=opt.resize_to_original)
+    scene = Scene(dataset, gaussians, shuffle=False, resolution_scales=opt.resolution_scales, resize_to_orig=opt.resize_to_original)
     gaussians.training_setup(opt)
-    max_level = len(opt.blur_levels)
-
+    max_pyramid_level = len(opt.resolution_scales)*len(opt.blur_levels)
+    max_level = len(opt.resolution_scales)
     viewpoint_stack = None
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
-    change_iter = opt.change_iter
+    change_iter_res = opt.change_iter
+    # change_iter_blur= opt.change_iter_res
+    total_iterations = opt.iterations  # π.χ. 30000
+    first_stage_limit = change_iter_res[0]  # π.χ. 2500
+    second_stage_limit = change_iter_res[1]  # π.χ. 6000
+
+    # Δημιουργία λίστας αλλαγής για τα επίπεδα θολώματος (blur levels)
+    change_iter_blur = []
+
+
+    # Υπολογισμός του πλήθους των υποσταδίων για κάθε στάδιο
+    first_stage_steps = (first_stage_limit) // 3  # Καθορισμός 3 ίσων υποσταδίων
+    second_stage_steps = (second_stage_limit - first_stage_limit) // 3
+    third_stage_steps = (opt.update_until  - second_stage_limit) // 3
+
+    # Πρώτο στάδιο (0 έως first_stage_limit)
+    for i in range(3):
+        change_iter_blur.append(first_stage_limit * (i + 1) // 3)  # Ισοκατανομή υποσταδίων
+
+    # Δεύτερο στάδιο (first_stage_limit έως second_stage_limit)
+    for i in range(3):
+        change_iter_blur.append(first_stage_limit + (second_stage_limit - first_stage_limit) * (i + 1) // 3)
+
+    # Τρίτο στάδιο (second_stage_limit έως total_iterations)
+    for i in range(3):
+        change_iter_blur.append(second_stage_limit + (opt.update_until - second_stage_limit) * (i + 1) // 3)
+
+    #Same analogy as resolution levels
+    # # Πρώτο στάδιο (0 έως first_stage_limit)
+    # change_iter_blur.append(((first_stage_limit*first_stage_limit) // total_iterations) + first_iter) 
+    # change_iter_blur.append(((second_stage_limit *(second_stage_limit -first_stage_limit))// total_iterations)+first_iter)  
+
+    # # Δεύτερο στάδιο (first_stage_limit έως second_stage_limit)
+    # change_iter_blur.append(((first_stage_limit*first_stage_limit) // total_iterations) + first_stage_limit) 
+    # change_iter_blur.append(((second_stage_limit *(second_stage_limit -first_stage_limit))// total_iterations)+first_stage_limit)  
+
+    # # Τρίτο στάδιο (second_stage_limit έως total_iterations)
+    # change_iter_blur.append(((first_stage_limit*first_stage_limit) // total_iterations) + second_stage_limit) 
+    # change_iter_blur.append(((second_stage_limit *(second_stage_limit -first_stage_limit))// total_iterations)+second_stage_limit)  
+
+    # Print the change_iter_blur list
+    print("change_iter_blur:", change_iter_blur)
+    change_pyramid_level = []
+    
+    change_pyramid_level = change_iter_res + change_iter_blur
+    
+    # Ταξινομούμε τη λίστα με βάση την επανάληψη
+    change_pyramid_level = sorted(set(change_pyramid_level))
+
+    print("change_level:", change_pyramid_level)
+
     warm_up_iter = 0
     update_value = opt.stage_hr_factor**(1.0/opt.stage_split)
+    cur_resolution = 1
+    # cur_pyramid_level = 1
     cur_level = 1
-    last_change_iter = opt.update_from
-    next_change_iter = change_iter[0]
+    cur_substage = 1
+    last_change_iter= opt.update_from
+    next_change_iter = change_pyramid_level[0]
     change_split_level_iter = get_change_split_iter(last_change_iter, next_change_iter, opt.stage_split)
-    split_count = []
-    new_splits = 0
-    
 
+    split_count = []  # Λίστα για το πλήθος των splits
     for iteration in range(first_iter, opt.iterations + 1):
+
+        bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
+        background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
         if network_gui.conn == None:
             network_gui.try_connect()
         while network_gui.conn != None:
@@ -115,18 +170,20 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
         if iteration % 1000 == 0:
             gaussians.oneupSHdegree()
 
-        bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
-        background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
+        # bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
+        # background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
 
         # Pick a random Camera
         if not viewpoint_stack:
-            viewpoint_stack = scene.getTrainCameras().copy()
+            viewpoint_stack = scene.getTrainCameras_pyramid_level().copy()
 
         cur_pop_id=randint(0, len(viewpoint_stack)-1)
 
         # Render
-        is_densify_iter = (iteration > opt.update_from and iteration % opt.update_interval == 0)
+        new_update_interval = len(scene.getTrainCameras_pyramid_level())
+        is_densify_iter = (iteration > opt.update_from and iteration % new_update_interval == 0)
+        # is_densify_iter = (iteration > opt.update_from and iteration % opt.update_interval == 0)
         viewpoint_cam=viewpoint_stack.pop(cur_pop_id)
 
         render_pkg=render(viewpoint_cam, gaussians, pipe, background)
@@ -152,6 +209,8 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
 
             # Log and save
             training_report(tb_writer,iteration, Ll1, image_loss,l1_loss,testing_iterations, scene, render,(pipe, background), logger, lpips_fn)
+
+
             if (iteration in saving_iterations):
                 logger.info("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
@@ -164,54 +223,52 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
                 # densification
                 if is_densify_iter:
-                    raw_splits = gaussians.adjust_gaussian(opt.densify_grad_threshold, update_value,opt.min_opacity, cur_stage=cur_level
+                    new_splits = gaussians.adjust_gaussian(opt.densify_grad_threshold, update_value,opt.min_opacity, cur_stage=cur_substage
                                               ,opacity_reduce_weight=opt.opacity_reduce_weight, residual_split_scale_div=opt.residual_split_scale_div)
-                    # Add new splits to the count
-                    split_count.append(raw_splits)
-                    # If no splits happened → new_splits may be None
-                    new_splits = raw_splits if raw_splits is not None else 0
-                    
+
                     split_count.append(new_splits)
 
-                    tb_writer.add_scalar("splits/new_splits", new_splits, iteration)
-                    
-                    
-            # Warm up for new blur level
-            if iteration < opt.update_until  and warm_up_iter != 0 and iteration % opt.update_interval == 0:
+            if iteration < opt.update_until and iteration > opt.start_stat and warm_up_iter != 0 and iteration % opt.update_interval == 0:
                 split_count.append(0)
-                new_splits = 0
-                tb_writer.add_scalar("splits/new_splits", new_splits, iteration)
-
 
 
             if iteration == opt.update_until:
-                # Output folder for plots
-                output_folder = os.path.join(args.model_path, 'plots')  
+                # Ορισμός του output folder με το `args.model_path`
+                output_folder = os.path.join(args.model_path, 'plots')  # Δημιουργεί τον φάκελο 'plots' μέσα στο `model_path`
 
+                # Δημιουργία του φακέλου αν δεν υπάρχει
                 os.makedirs(output_folder, exist_ok=True)
 
+                # Αποθήκευση των τιμών για το plot στο συγκεκριμένο φάκελο
                 if iteration == opt.update_until:
                     np.savetxt(os.path.join(output_folder, "split_count.txt"), split_count)
 
 
+            if iteration in change_pyramid_level:
+                print("Pyramid level up at iteration:", iteration)
+                print("Current pyramid level before up:", scene.cur_pyramid_level)
+                scene.up_one_pyramid_level()
+                print("New pyramid level after up:", scene.cur_pyramid_level)
 
-            if iteration in change_iter:
-                scene.up_one_blur_level()
-                warm_up_iter=opt.warm_up_iter
-                if scene.cur_blur_level is not max_level-1:
-                    next_change_iter = change_iter[scene.cur_blur_level]
-                    last_change_iter = change_iter[scene.cur_blur_level-1] + warm_up_iter
+                if iteration in change_iter_res:
+                    warm_up_iter=opt.warm_up_iter
+                    scene.up_one_resolution()
+                if scene.cur_resolution is not max_level-1:
+                    next_change_iter = change_iter_res[scene.cur_resolution]
+                    last_change_iter = change_iter_res[scene.cur_resolution-1] + warm_up_iter
                 else:
                     next_change_iter = opt.update_until
-                    last_change_iter = change_iter[scene.cur_blur_level-1] + warm_up_iter
-                #When to trigger substage transitions (change_split_level_iter)
-                cur_level = opt.stage_split*(scene.cur_blur_level) + 1
-                change_split_level_iter = get_change_split_iter(last_change_iter, next_change_iter, opt.stage_split)
-                viewpoint_stack = scene.getTrainCameras().copy()
-                scene.clear_image()
+                    last_change_iter = change_iter_res[scene.cur_resolution-1] + warm_up_iter
+                if iteration in change_iter_res:
+                    cur_substage = opt.stage_split*(scene.cur_resolution) + 1
+                    print("cur_substage:", cur_substage)
+                    change_split_level_iter = get_change_split_iter(last_change_iter, next_change_iter, opt.stage_split)
+                viewpoint_stack = scene.getTrainCameras_pyramid_level().copy()
+                scene.clear_pyramid_level_image()
 
+       
 
-            if  scene.cur_blur_level!=0 and opt.use_opacity_reduce and iteration < opt.prune_until:
+            if  scene.cur_resolution!=0 and opt.use_opacity_reduce and iteration < opt.prune_until:
                 if iteration % opt.opacity_reduce_interval == 0:
                     if iteration >= opt.update_until:
                         gaussians.prune_opacity(opt.min_opacity)
@@ -232,8 +289,18 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
             if change_split_level_iter is not 0 and warm_up_iter is 0 and iteration > opt.update_from and iteration < opt.update_until:
                 change_split_level_iter-=1
                 if change_split_level_iter is 0:
-                    cur_level+=1
+                    cur_substage+=1
+                    # print("cur_substage:", cur_substage)
                     change_split_level_iter = get_change_split_iter(last_change_iter, next_change_iter, opt.stage_split)
+
+
+                    # cur_level+=1
+                    # print("cur_level:", cur_level)
+                    # change_split_level_iter = get_change_split_iter(last_change_iter_pyramid_level, next_change_iter_pyramid_level, opt.stage_split)
+    
+    
+    if tb_writer:
+        tb_writer.close()
 
 
 def get_logger(path):
@@ -254,21 +321,35 @@ def get_logger(path):
 
     return logger
 
-def training_report(tb_writer, iteration, Ll1, loss, l1_loss, testing_iterations, scene : Scene, renderFunc, renderArgs, logger, lpips_fn):
+def training_report(
+        tb_writer,
+        iteration,
+        Ll1,
+        loss,
+        l1_loss_fn,
+        testing_iterations,
+        scene: Scene,
+        renderFunc,
+        renderArgs,
+        logger,
+        lpips_fn
+    ):
+    """
+    Full TensorBoard logging for ResGS with pyramid levels.
+    """
+
+    # Unpack rendering args
+    pipe, background = renderArgs
+
     # ----------------------------------------------------------------------
     #                         TRAIN LOGGING
     # ----------------------------------------------------------------------
     if tb_writer:
         tb_writer.add_scalar("train/L1", Ll1.item(), iteration)
         tb_writer.add_scalar("train/Total_Loss", loss.item(), iteration)
-        tb_writer.add_scalar("train/Blur_Level", scene.cur_blur_level, iteration)
-       
-    # Report test and samples of training set
-    if iteration in testing_iterations:
-        torch.cuda.empty_cache()
-        validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()},
-                              {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
- 
+        tb_writer.add_scalar("train/Pyramid_Level", scene.cur_pyramid_level, iteration)
+        tb_writer.add_scalar("train/Resolution_Level", scene.cur_resolution, iteration)
+
     # ----------------------------------------------------------------------
     #                         TEST EVALUATION
     # ----------------------------------------------------------------------
@@ -276,8 +357,19 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, testing_iterations
 
         torch.cuda.empty_cache()
 
-        validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()},
-                              {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
+        validation_configs = (
+            {
+                "name": "test",
+                "cameras": scene.getTestCameras_pyramid_level(),
+            },
+            {
+                "name": "train",
+                "cameras": [
+                    scene.getTrainCameras_pyramid_level()[i % len(scene.getTrainCameras_pyramid_level())]
+                    for i in range(5, 30, 5)
+                ],
+            },
+        )
 
         for config in validation_configs:
 
@@ -290,14 +382,11 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, testing_iterations
             # Evaluate each camera
             for idx, vp in enumerate(cams):
 
-                pipe, background = renderArgs
-
                 pkg = renderFunc(vp, scene.gaussians, pipe, background)
                 image = torch.clamp(pkg["render"], 0.0, 1.0)
                 gt = torch.clamp(vp.original_image.cuda(), 0.0, 1.0)
 
-                l1_val = l1_loss(image, gt).mean().double()
-
+                l1_val = l1_loss_fn(image, gt).mean().double()
                 psnr_val = psnr(image, gt).mean().double()
                 ssim_val = ssim(image, gt).mean().double()
                 lpips_val = lpips_fn(image, gt).mean().double()
@@ -353,7 +442,6 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, testing_iterations
 
         torch.cuda.empty_cache()
 
-    return
 
 if __name__ == "__main__":
     # Set up command line argument parser
@@ -362,12 +450,12 @@ if __name__ == "__main__":
     op = OptimizationParams(parser)
     pp = PipelineParams(parser)
     parser.add_argument('--ip', type=str, default="127.0.0.1")
-    parser.add_argument('--port', type=int, default=6009)
+    parser.add_argument('--port', type=int, default=6010)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument('--warmup', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[15_000, 30_000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[30_000])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[5_999, 7_000,15_000, 30_000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[5_999,7_000,15_000, 30_000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
