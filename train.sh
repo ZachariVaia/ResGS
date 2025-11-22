@@ -12,6 +12,7 @@ SAVE_PATH="${SAVE_PATH:-/home/vaia/ResGS/output/resgs_2500_6000_abss_full_eval}"
 
 # ====== RUN DOCKER ======
 docker run -it --rm --gpus all \
+ --env CUDA_VISIBLE_DEVICES=0 \
   -v /home/vaia/ResGS:/app \
   -v /home/vaia/ResGS/data:/app/data \
   -v /home/vaia/ResGS/output:/app/output \
