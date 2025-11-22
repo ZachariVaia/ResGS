@@ -11,18 +11,18 @@ DATASET_PATH="${DATASET_PATH:-/home/vaia/ResGS/data}"
 SAVE_PATH="${SAVE_PATH:-/home/vaia/ResGS/output/multi_res_scale_opencv_25_13_2500_6000_abs_tb_full_eval}"
 
 # ====== RUN DOCKER ======
-CUDA_VISIBLE_DEVICES=2 docker run -it --rm --gpus all \
+docker run -it --rm \
+  --gpus all \
+  --env CUDA_VISIBLE_DEVICES=2 \
   -v /home/vaia/ResGS:/app \
   -v /home/vaia/ResGS/data:/app/data \
   -v /home/vaia/ResGS/output:/app/output \
   resgs:latest \
   bash -lc "
-      echo '[INFO] Running RESGS...'
+      echo '[INFO] Running RESGS on GPU 2...]'
       python -u /app/script.py \
         --eval \
         --dataset_path /app/data \
         --save_path /app/output/multi_res_scale_opencv_25_13_2500_6000_abs_tb_full_eval ;
-
-      # ===== FIX PERMISSIONS INSIDE CONTAINER =====
       chown -R 1000:1000 /app/output
   "
