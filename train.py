@@ -33,6 +33,7 @@ from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
 from arguments.__init__ import ModelParams, PipelineParams, OptimizationParams
 from time import time
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 
@@ -149,6 +150,7 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
     change_split_level_iter = get_change_split_iter(last_change_iter, next_change_iter, opt.stage_split)
 
     split_count = []  # Λίστα για το πλήθος των splits
+    new_splits = 0
     for iteration in range(first_iter, opt.iterations + 1):
 
         bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
@@ -182,8 +184,8 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
 
         # Render
         new_update_interval = len(scene.getTrainCameras_pyramid_level())
-        is_densify_iter = (iteration > opt.update_from and iteration % new_update_interval == 0)
-        # is_densify_iter = (iteration > opt.update_from and iteration % opt.update_interval == 0)
+        # is_densify_iter = (iteration > opt.update_from and iteration % new_update_interval == 0)
+        is_densify_iter = (iteration > opt.update_from and iteration % opt.update_interval == 0)
         viewpoint_cam=viewpoint_stack.pop(cur_pop_id)
 
         render_pkg=render(viewpoint_cam, gaussians, pipe, background)
@@ -223,13 +225,22 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
                 # densification
                 if is_densify_iter:
-                    new_splits = gaussians.adjust_gaussian(opt.densify_grad_threshold, update_value,opt.min_opacity, cur_stage=cur_substage
+                    raw_splits  = gaussians.adjust_gaussian(opt.densify_grad_threshold, update_value,opt.min_opacity, cur_stage=cur_substage
                                               ,opacity_reduce_weight=opt.opacity_reduce_weight, residual_split_scale_div=opt.residual_split_scale_div)
 
+                    # Add new splits to the count
+                    split_count.append(raw_splits)
+                    # If no splits happened → new_splits may be None
+                    new_splits = raw_splits if raw_splits is not None else 0
+                    
                     split_count.append(new_splits)
 
-            if iteration < opt.update_until and iteration > opt.start_stat and warm_up_iter != 0 and iteration % opt.update_interval == 0:
+                    tb_writer.add_scalar("splits/new_splits", new_splits, iteration)
+
+            if iteration < opt.update_until  and warm_up_iter != 0 and iteration % opt.update_interval == 0:
                 split_count.append(0)
+                new_splits = 0
+                tb_writer.add_scalar("splits/new_splits", new_splits, iteration)
 
 
             if iteration == opt.update_until:
