@@ -60,8 +60,8 @@ def prepare_output_and_logger(args):
     with open(os.path.join(args.model_path, "cfg_args"), 'w') as cfg_log_f:
         cfg_log_f.write(str(Namespace(**vars(args))))
 
-    # Create Tensorboard writer
-    tb_writer = None
+
+    tb_writer = SummaryWriter(log_dir=os.path.join(args.model_path, "tb"))
     return tb_writer
 
 def loss_fn(image, gt_image, lambda_dssim):
@@ -76,7 +76,7 @@ def get_change_split_iter (last_change_iter, next_change_iter, stage_split):
 def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_iterations, logger=None):
     first_iter = 0
     lpips_fn = lpips.LPIPS(net='vgg').to("cuda")
-    _ = prepare_output_and_logger(dataset)
+    tb_writer = prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians, shuffle=False, blur_levels= opt.blur_levels, resolution_scales=[1.0], resize_to_orig=opt.resize_to_original)
     gaussians.training_setup(opt)
@@ -93,7 +93,9 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
     last_change_iter = opt.update_from
     next_change_iter = change_iter[0]
     change_split_level_iter = get_change_split_iter(last_change_iter, next_change_iter, opt.stage_split)
-
+    split_count = []
+    new_splits = 0
+    
 
     for iteration in range(first_iter, opt.iterations + 1):
         if network_gui.conn == None:
@@ -149,7 +151,7 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
                 progress_bar.close()
 
             # Log and save
-            training_report(iteration, Ll1, None, l1_loss, testing_iterations, scene, render, (pipe, background), logger, lpips_fn)
+            training_report(tb_writer,iteration, Ll1, image_loss,l1_loss,testing_iterations, scene, render,(pipe, background), logger, lpips_fn)
             if (iteration in saving_iterations):
                 logger.info("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
@@ -162,13 +164,23 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
                 # densification
                 if is_densify_iter:
-                    new_splits = gaussians.adjust_gaussian(opt.densify_grad_threshold, update_value,opt.min_opacity, cur_stage=cur_level
+                    raw_splits = gaussians.adjust_gaussian(opt.densify_grad_threshold, update_value,opt.min_opacity, cur_stage=cur_level
                                               ,opacity_reduce_weight=opt.opacity_reduce_weight, residual_split_scale_div=opt.residual_split_scale_div)
                     # Add new splits to the count
+                    split_count.append(raw_splits)
+                    # If no splits happened → new_splits may be None
+                    new_splits = raw_splits if raw_splits is not None else 0
+                    
                     split_count.append(new_splits)
+
+                    tb_writer.add_scalar("splits/new_splits", new_splits, iteration)
+                    
+                    
             # Warm up for new blur level
-            if iteration < opt.update_until and iteration > opt.start_stat and warm_up_iter != 0 and iteration % opt.update_interval == 0:
+            if iteration < opt.update_until  and warm_up_iter != 0 and iteration % opt.update_interval == 0:
                 split_count.append(0)
+                new_splits = 0
+                tb_writer.add_scalar("splits/new_splits", new_splits, iteration)
 
 
 
@@ -242,7 +254,7 @@ def get_logger(path):
 
     return logger
 
-def training_report(iteration, Ll1, loss, l1_loss, testing_iterations, scene : Scene, renderFunc, renderArgs, logger, lpips_fn):
+def training_report(tb_writer, iteration, Ll1, loss, l1_loss, testing_iterations, scene : Scene, renderFunc, renderArgs, logger, lpips_fn):
     # ----------------------------------------------------------------------
     #                         TRAIN LOGGING
     # ----------------------------------------------------------------------
@@ -250,6 +262,7 @@ def training_report(iteration, Ll1, loss, l1_loss, testing_iterations, scene : S
         tb_writer.add_scalar("train/L1", Ll1.item(), iteration)
         tb_writer.add_scalar("train/Total_Loss", loss.item(), iteration)
         tb_writer.add_scalar("train/Blur_Level", scene.cur_blur_level, iteration)
+       
     # Report test and samples of training set
     if iteration in testing_iterations:
         torch.cuda.empty_cache()
@@ -263,19 +276,8 @@ def training_report(iteration, Ll1, loss, l1_loss, testing_iterations, scene : S
 
         torch.cuda.empty_cache()
 
-        validation_configs = (
-            {
-                "name": "test",
-                "cameras": scene.getTestCameras_pyramid_level(),
-            },
-            {
-                "name": "train",
-                "cameras": [
-                    scene.getTrainCameras_pyramid_level()[i % len(scene.getTrainCameras_pyramid_level())]
-                    for i in range(5, 30, 5)
-                ],
-            },
-        )
+        validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()},
+                              {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
 
         for config in validation_configs:
 
@@ -288,11 +290,14 @@ def training_report(iteration, Ll1, loss, l1_loss, testing_iterations, scene : S
             # Evaluate each camera
             for idx, vp in enumerate(cams):
 
+                pipe, background = renderArgs
+
                 pkg = renderFunc(vp, scene.gaussians, pipe, background)
                 image = torch.clamp(pkg["render"], 0.0, 1.0)
                 gt = torch.clamp(vp.original_image.cuda(), 0.0, 1.0)
 
-                l1_val = l1_loss_fn(image, gt).mean().double()
+                l1_val = l1_loss(image, gt).mean().double()
+
                 psnr_val = psnr(image, gt).mean().double()
                 ssim_val = ssim(image, gt).mean().double()
                 lpips_val = lpips_fn(image, gt).mean().double()
