@@ -75,6 +75,7 @@ echo
 echo "================ RUNNING TRAINING ================"
 
 docker run -it --rm --gpus all \
+ --env CUDA_VISIBLE_DEVICES=2 \
   -v /home/vaia/ResGS:/app \
   resgs:latest \
   bash -lc "python -u /app/train.py \
@@ -91,6 +92,7 @@ echo
 echo "================ RUNNING RENDER ================"
 
 docker run -it --rm --gpus all \
+ --env CUDA_VISIBLE_DEVICES=2 \
   -v /home/vaia/ResGS:/app \
   resgs:latest \
   bash -lc "python -u /app/render.py \
@@ -105,6 +107,7 @@ echo
 echo "================ RUNNING METRICS ================"
 
 docker run -it --rm --gpus all \
+ --env CUDA_VISIBLE_DEVICES=2 \
   -v /home/vaia/ResGS:/app \
   resgs:latest \
   bash -lc "python -u /app/metrics.py \
