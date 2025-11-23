@@ -9,9 +9,9 @@ sudo chmod -R u+rwX /home/vaia/ResGS/output
 # ====================================================
 DATASET="/home/vaia/ResGS/data"
 OUTPUT="/home/vaia/ResGS/output"
-RUN_NAME="opencv_25_13_3dgs_tb_2000_5000_camera_interval/bonsai"
+RUN_NAME="Blur_gs_opencv_25_13_abs_tb_2500_6000_single_train/flowers"
 RUN_PATH="${OUTPUT}/${RUN_NAME}"
-IMAGE_MODE="images_2"
+IMAGE_MODE="images_4"
 
 # ====================================================
 # CREATE OUTPUT STRUCTURE
@@ -78,7 +78,7 @@ docker run -it --rm --gpus all \
   resgs:latest \
   bash -lc "python -u /app/train.py \
       --eval \
-      --source_path /app/data/MipNeRF/bonsai \
+      --source_path /app/data/MipNeRF/flowers \
       --images ${IMAGE_MODE} \
       --model_path /app/output/${RUN_NAME}"
 

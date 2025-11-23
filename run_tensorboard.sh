@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Path to logs INSIDE the container (must start with /app)
-LOGDIR=/app/output/opencv_25_13_tb_abs_full_eval/default/MipNeRF/flowers/tb
+LOGDIR=/app/output//resgs_abs_tb_single_train/flowers/tb
 
 # Port where TensorBoard will be available
 PORT=6010
