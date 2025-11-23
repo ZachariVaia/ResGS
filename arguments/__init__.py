@@ -97,7 +97,7 @@ class OptimizationParams(ParamGroup):
         #self.densify_grad_threshold = 0.00067 #abs
 
         self.change_iter = [2500, 6000]
-        #self.change_iter = [2000, 5000]
+        self.change_iter = [2000, 4500]
         self.resolution_scales = [2, 1, 0]
         self.blur_levels = [2, 1, 0]
         self.resize_to_original = False
