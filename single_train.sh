@@ -9,9 +9,9 @@ sudo chmod -R u+rwX /home/vaia/ResGS/output
 # ====================================================
 DATASET="/home/vaia/ResGS/data"
 OUTPUT="/home/vaia/ResGS/output"
-RUN_NAME="multi_res_scale_opencv_25_13_3dgs_tb_2500_6000/bonsai"
+RUN_NAME="multi_res_scale_opencv_25_13_3dgs_tb_2500_6000_single_train/flowers"
 RUN_PATH="${OUTPUT}/${RUN_NAME}"
-IMAGE_MODE="images_2"
+IMAGE_MODE="images_4"
 
 # ====================================================
 # CREATE OUTPUT STRUCTURE
