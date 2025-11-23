@@ -9,7 +9,7 @@ sudo chmod -R u+rwX /home/vaia/ResGS/output
 # ====================================================
 DATASET="/home/vaia/ResGS/data"
 OUTPUT="/home/vaia/ResGS/output"
-RUN_NAME="multi_res_scale_opencv_25_13_3dgs_tb_2500_6000_single_train/flowers"
+RUN_NAME="multi_res_scale_opencv_25_13_3dgs_tb_2500_6000_single_train/bicycle"
 RUN_PATH="${OUTPUT}/${RUN_NAME}"
 IMAGE_MODE="images_4"
 
@@ -56,6 +56,7 @@ fi
 echo "[INFO] Starting TensorBoard on http://localhost:${TB_PORT} ..."
 
 docker run -d --rm --gpus all \
+ --env CUDA_VISIBLE_DEVICES=2 \
   -p ${TB_PORT}:6006 \
   -v /home/vaia/ResGS:/app \
   resgs:latest \
@@ -78,7 +79,7 @@ docker run -it --rm --gpus all \
   resgs:latest \
   bash -lc "python -u /app/train.py \
       --eval \
-      --source_path /app/data/MipNeRF/flowers \
+      --source_path /app/data/MipNeRF/bicycle \
       --images ${IMAGE_MODE} \
       --model_path /app/output/${RUN_NAME}"
 
