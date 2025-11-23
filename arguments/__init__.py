@@ -92,7 +92,8 @@ class OptimizationParams(ParamGroup):
 
         self.min_opacity = 0.005
 
-        self.densify_grad_threshold = 0.00067
+        # self.densify_grad_threshold = 0.00067
+        self.densify_grad_threshold = 0.00028
 
         self.change_iter = [2500, 6000]
         self.resolution_scales = [2, 1, 0]
