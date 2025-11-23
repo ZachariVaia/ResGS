@@ -78,7 +78,7 @@ docker run -it --rm --gpus all \
   resgs:latest \
   bash -lc "python -u /app/train.py \
       --eval \
-      --source_path /app/data/MipNeRF/bonsai \
+      --source_path /app/data/MipNeRF/flowers \
       --images ${IMAGE_MODE} \
       --model_path /app/output/${RUN_NAME}"
 
