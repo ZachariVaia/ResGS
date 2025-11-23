@@ -56,6 +56,7 @@ fi
 echo "[INFO] Starting TensorBoard on http://localhost:${TB_PORT} ..."
 
 docker run -d --rm --gpus all \
+ --env CUDA_VISIBLE_DEVICES=2 \
   -p ${TB_PORT}:6006 \
   -v /home/vaia/ResGS:/app \
   resgs:latest \
