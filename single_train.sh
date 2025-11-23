@@ -9,7 +9,7 @@ sudo chmod -R u+rwX /home/vaia/ResGS/output
 # ====================================================
 DATASET="/home/vaia/ResGS/data"
 OUTPUT="/home/vaia/ResGS/output"
-RUN_NAME="multi_res_scale_opencv_25_13_3dgs_tb_2000_4500_single_train/bicycle"
+RUN_NAME="multi_res_scale_opencv_25_13_abs_tb_2000_4500_single_train/bicycle"
 RUN_PATH="${OUTPUT}/${RUN_NAME}"
 IMAGE_MODE="images_4"
 
