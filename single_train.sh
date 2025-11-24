@@ -9,7 +9,7 @@ sudo chmod -R u+rwX /home/vaia/ResGS/output
 # ====================================================
 DATASET="/home/vaia/ResGS/data"
 OUTPUT="/home/vaia/ResGS/output"
-RUN_NAME="multi_res_scale_opencv_25_13_abs_tb_2500_6000_single_train/room"
+RUN_NAME="multi_res_scale_opencv_25_13_abs_tb_2500_6000_single_train/bonsai"
 RUN_PATH="${OUTPUT}/${RUN_NAME}"
 IMAGE_MODE="images_2"
 
@@ -80,7 +80,7 @@ docker run -it --rm --gpus all \
   resgs:latest \
   bash -lc "python -u /app/train.py \
       --eval \
-      --source_path /app/data/MipNeRF/room \
+      --source_path /app/data/MipNeRF/bonsai \
       --images ${IMAGE_MODE} \
       --model_path /app/output/${RUN_NAME}"
 
