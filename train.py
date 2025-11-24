@@ -93,6 +93,7 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
     total_iterations = opt.iterations  # π.χ. 30000
     first_stage_limit = change_iter_res[0]  # π.χ. 2500
     second_stage_limit = change_iter_res[1]  # π.χ. 6000
+    third_stage_limit = opt.update_until - 6000  # π.χ. 10000
 
     # Δημιουργία λίστας αλλαγής για τα επίπεδα θολώματος (blur levels)
     change_iter_blur = []
@@ -112,21 +113,10 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
         change_iter_blur.append(first_stage_limit + (second_stage_limit - first_stage_limit) * (i + 1) // 3)
 
     # Τρίτο στάδιο (second_stage_limit έως total_iterations)
-    for i in range(3):
-        change_iter_blur.append(second_stage_limit + (opt.update_until - second_stage_limit) * (i + 1) // 3)
+    for i in range(2):
+        change_iter_blur.append(second_stage_limit + ( third_stage_limit - second_stage_limit) * (i + 1) // 2)
 
-    #Same analogy as resolution levels
-    # # Πρώτο στάδιο (0 έως first_stage_limit)
-    # change_iter_blur.append(((first_stage_limit*first_stage_limit) // total_iterations) + first_iter) 
-    # change_iter_blur.append(((second_stage_limit *(second_stage_limit -first_stage_limit))// total_iterations)+first_iter)  
-
-    # # Δεύτερο στάδιο (first_stage_limit έως second_stage_limit)
-    # change_iter_blur.append(((first_stage_limit*first_stage_limit) // total_iterations) + first_stage_limit) 
-    # change_iter_blur.append(((second_stage_limit *(second_stage_limit -first_stage_limit))// total_iterations)+first_stage_limit)  
-
-    # # Τρίτο στάδιο (second_stage_limit έως total_iterations)
-    # change_iter_blur.append(((first_stage_limit*first_stage_limit) // total_iterations) + second_stage_limit) 
-    # change_iter_blur.append(((second_stage_limit *(second_stage_limit -first_stage_limit))// total_iterations)+second_stage_limit)  
+    change_iter_blur.append( third_stage_limit )  # Τελευταιο στάδιο μέχρι το update_until
 
     # Print the change_iter_blur list
     print("change_iter_blur:", change_iter_blur)
