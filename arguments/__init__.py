@@ -88,7 +88,7 @@ class OptimizationParams(ParamGroup):
         self.start_stat = 500
         self.update_from = 700
         self.update_interval = 100
-        self.update_until = 12_000
+        self.update_until = 16_000
 
         self.min_opacity = 0.005
         # self.densify_grad_threshold = 0.00028
