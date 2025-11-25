@@ -92,8 +92,8 @@ class OptimizationParams(ParamGroup):
 
         self.min_opacity = 0.005
 
-        # self.densify_grad_threshold = 0.00067
-        self.densify_grad_threshold = 0.00028 #3dgs
+        self.densify_grad_threshold = 0.00067
+        # self.densify_grad_threshold = 0.00028 #3dgs
         # self.densify_grad_threshold = 0.0016 #small abs
 
         self.change_iter = [2500, 6000]
