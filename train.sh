@@ -8,12 +8,12 @@ sudo chmod -R u+rwX /home/vaia/ResGS/output
 
 # ====== PATHS ======
 DATASET_PATH="${DATASET_PATH:-/home/vaia/ResGS/data}"
-SAVE_PATH="${SAVE_PATH:-/home/vaia/ResGS/output/multi_res_scale_opencv_25_13_2500_6000_until_16000_abs_tb_full_eval_all}"
+SAVE_PATH="${SAVE_PATH:-/home/vaia/ResGS/output/multi_res_scale_opencv_25_13_2500_6000_until_16000_3dgs_tb_full_eval_all}"
 
 # ====== RUN DOCKER ======
 docker run -it --rm \
   --gpus all \
-  --env CUDA_VISIBLE_DEVICES=2 \
+  --env CUDA_VISIBLE_DEVICES=0 \
   -v /home/vaia/ResGS:/app \
   -v /home/vaia/ResGS/data:/app/data \
   -v /home/vaia/ResGS/output:/app/output \
@@ -23,6 +23,6 @@ docker run -it --rm \
       python -u /app/script.py \
         --eval \
         --dataset_path /app/data \
-        --save_path /app/output/multi_res_scale_opencv_25_13_2500_6000_until_16000_abs_tb_full_eval_all ;
+        --save_path /app/output/multi_res_scale_opencv_25_13_2500_6000_until_16000_3dgs_tb_full_eval_all ;
       chown -R 1000:1000 /app/output
   "
