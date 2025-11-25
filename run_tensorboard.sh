@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Path to logs INSIDE the container (must start with /app)
-LOGDIR=/app/output//resgs_abs_tb_single_train/flowers/tb
+LOGDIR=/app/output/blurgs_opencv_25_13_2500_6000_abs_tb_full_eval/default/MipNeRF/garden/tb
 
 # Port where TensorBoard will be available
-PORT=6010
+PORT=6059
 
 docker run -it --gpus all \
     -p ${PORT}:6006 \
