@@ -8,7 +8,7 @@ sudo chmod -R u+rwX /home/vaia/ResGS/output
 
 # ====== PATHS ======
 DATASET_PATH="${DATASET_PATH:-/home/vaia/ResGS/data}"
-SAVE_PATH="${SAVE_PATH:-/home/vaia/ResGS/output/resgs_2500_6000_abs_full_eval_last}"
+SAVE_PATH="${SAVE_PATH:-/home/vaia/ResGS/output/resgs_2500_6000_3dgs_full_eval_last}"
 
 # ====== RUN DOCKER ======
 docker run -it --rm --gpus all \
@@ -22,7 +22,7 @@ docker run -it --rm --gpus all \
       python -u /app/script.py \
         --eval \
         --dataset_path /app/data \
-        --save_path /app/output/resgs_2500_6000_abs_full_eval_last ;
+        --save_path /app/output/resgs_2500_6000_3dgs_full_eval_last ;
 
       # ===== FIX PERMISSIONS INSIDE CONTAINER =====
       chown -R 1000:1000 /app/output
