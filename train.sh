@@ -13,7 +13,7 @@ SAVE_PATH="${SAVE_PATH:-/home/vaia/ResGS/output/blur_gs_opencv_25_13_2500_6000_3
 # ====== RUN DOCKER ======
 docker run -it --rm  \
  --gpus all \
- --env CUDA_VISIBLE_DEVICES=1 \
+ --env CUDA_VISIBLE_DEVICES=0 \
   -v /home/vaia/ResGS:/app \
   -v /home/vaia/ResGS/data:/app/data \
   -v /home/vaia/ResGS/output:/app/output \
