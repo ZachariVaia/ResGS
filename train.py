@@ -36,7 +36,7 @@ from time import time
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
-
+# torch.manual.seed(0)
 # torch.set_num_threads(32)
 
 def savefiles(path):
@@ -79,6 +79,8 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
     first_iter = 0
     lpips_fn = lpips.LPIPS(net='vgg').to("cuda")
     tb_writer = prepare_output_and_logger(dataset)
+
+    
     gaussians = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians, shuffle=False, resolution_scales=opt.resolution_scales, resize_to_orig=opt.resize_to_original)
     gaussians.training_setup(opt)
@@ -129,7 +131,12 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
 
     print("change_level:", change_pyramid_level)
 
-    warm_up_iter = 0
+    # warm_up_iter = 0
+    warm_up_iter = opt.warm_up_iter # enable 500-iter warm-up  for level 0 
+    #    logging flag 
+    log_after_warmup = False # we never log same blur level twice 
+    logged_levels = set()
+
     update_value = opt.stage_hr_factor**(1.0/opt.stage_split)
     cur_resolution = 1
     # cur_pyramid_level = 1
@@ -266,8 +273,74 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
                     change_split_level_iter = get_change_split_iter(last_change_iter, next_change_iter, opt.stage_split)
                 viewpoint_stack = scene.getTrainCameras_pyramid_level().copy()
                 scene.clear_pyramid_level_image()
+            # ------------------------------------------------------------
+            #   GRADIENT LOGGING AFTER WARM-UP FOR EACH PYRAMID+RES LEVEL
+            # ------------------------------------------------------------
 
-       
+            # Create the logging registry once
+            if not hasattr(scene, "logged_levels"):
+                scene.logged_levels = set()
+
+            # Detect level change moment
+            if iteration in change_pyramid_level:
+                scene.last_enter_iter = iteration   # record when we entered new pyramid level
+
+            # Compute when warm-up finishes
+            if hasattr(scene, "last_enter_iter"):
+                target_log_iter = scene.last_enter_iter + opt.warm_up_iter + 1
+            else:
+                target_log_iter = None
+
+            # Trigger logging exactly once per level
+            if target_log_iter is not None and iteration == target_log_iter:
+
+                level_id = f"pyr{scene.cur_pyramid_level}_res{scene.cur_resolution}"
+
+                if level_id not in scene.logged_levels:
+                    print(f"[DEBUG] Logging gradients at iter={iteration}, level={level_id}")
+
+                    if hasattr(gaussians, "xyz_gradient_accum_abs"):
+
+                        # Compute gradient magnitude for all Gaussians
+                        grad_mag = (gaussians.xyz_gradient_accum_abs /
+                                    (gaussians.denom + 1e-8)).norm(dim=1)
+
+                        mean_val = grad_mag.mean().item()
+                        min_val = grad_mag.min().item()
+                        max_val = grad_mag.max().item()
+                        # ------------------------------------------------------------
+                        # LOG 3 GLOBAL PLOTS (mean, min, max) WITH ALL LEVELS IN SAME PLOT
+                        # ------------------------------------------------------------
+
+                        tb_writer.add_scalars(
+                            "grads_after_warmup/mean_all_levels",
+                            { level_id: mean_val },
+                            iteration
+                        )
+
+                        tb_writer.add_scalars(
+                            "grads_after_warmup/min_all_levels",
+                            { level_id: min_val },
+                            iteration
+                        )
+
+                        tb_writer.add_scalars(
+                            "grads_after_warmup/max_all_levels",
+                            { level_id: max_val },
+                            iteration
+                        )
+
+
+                        # # (Optional: still log histogram per level)
+                        # tb_writer.add_histogram(f"grads_after_warmup/{level_id}_hist",
+                        #                         grad_mag, iteration)
+
+                        # print(f"[LOGGED] Gradient stats saved for level {level_id}")
+                        scene.logged_levels.add(level_id)
+
+
+
+
 
             if  scene.cur_resolution!=0 and opt.use_opacity_reduce and iteration < opt.prune_until:
                 if iteration % opt.opacity_reduce_interval == 0:

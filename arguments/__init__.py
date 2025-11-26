@@ -85,16 +85,16 @@ class OptimizationParams(ParamGroup):
         self.percent_dense = 0.01
         self.lambda_dssim = 0.2
 
-        self.start_stat = 500
+        self.start_stat = 1
         self.update_from = 700
         self.update_interval = 100
         self.update_until = 16_000
 
         self.min_opacity = 0.005
-        self.densify_grad_threshold = 0.00028
+        # self.densify_grad_threshold = 0.00028
         # self.densify_grad_threshold = 0.00028 #3dgs
         # self.densify_grad_threshold = 0.0016 #small abs
-        # self.densify_grad_threshold = 0.00067 #abs
+        self.densify_grad_threshold = 0.00067 #abs
 
         self.change_iter = [2500, 6000]
  
