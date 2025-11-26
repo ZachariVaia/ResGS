@@ -89,7 +89,17 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
     change_iter = opt.change_iter
-    warm_up_iter = 0
+    # warm_up_iter = 0
+    warm_up_iter = opt.warm_up_iter  # enable 500-iter warm-up for level 0
+    # logging flag
+    log_after_warmup = False
+    # we never log same blur level twice
+    logged_levels = set()
+
+
+    log_after_warmup = False # Flag to log gradients after warm-up
+    logged_levels.add(-1) # Initialize with invalid level
+
     update_value = opt.stage_hr_factor**(1.0/opt.stage_split)
     cur_level = 1
     last_change_iter = opt.update_from
@@ -211,34 +221,43 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
                 change_split_level_iter = get_change_split_iter(last_change_iter, next_change_iter, opt.stage_split)
                 viewpoint_stack = scene.getTrainCameras().copy()
                 scene.clear_image()
+            
+
 
             # ------------------------------------------------------------
-            #   LOG GRADIENTS EXACTLY WHEN WARM-UP FINISHES FOR NEW LEVEL
+            #   LOG GRADIENTS WHEN WARM-UP FINISHES FOR EACH LEVEL
             # ------------------------------------------------------------
-            if warm_up_iter == 0 \
-                and scene.cur_blur_level not in logged_levels \
-                and hasattr(gaussians, "xyz_gradient_accum_abs"):
+            # --- FIX: compute exactly when to log gradient stats ---
+            # Compute correct target_log_iter for each blur level
+            if scene.cur_blur_level == 0:
+                target_log_iter = 1 + opt.warm_up_iter
 
-                level = scene.cur_blur_level
+            elif scene.cur_blur_level < (len(change_iter ) + 1):
+                target_log_iter = change_iter[scene.cur_blur_level] + opt.warm_up_iter + 1
 
-                # Gradient magnitude per Gaussian
-                grad_mag = (gaussians.xyz_gradient_accum_abs / (gaussians.denom + 1e-8)).norm(dim=1)
+            else:
+                target_log_iter = opt.update_until + opt.warm_up_iter + 1
 
-                # If level assignment exists
-                mask = (gaussians.levels == level) if hasattr(gaussians, "levels") else None
 
-                if mask is not None and mask.sum() > 0:
-                    g = grad_mag[mask]
+            if iteration == target_log_iter:
+                print(f"[DEBUG] iter={iteration}, target_log_iter={target_log_iter}, level={scene.cur_blur_level}")
+                if hasattr(gaussians, "xyz_gradient_accum_abs"):
+                    grad_mag = (gaussians.xyz_gradient_accum_abs / (gaussians.denom + 1e-8)).norm(dim=1)
 
-                    tb_writer.add_scalar(f"grads_after_warmup/level_{level}_mean", g.mean().item(), iteration)
-                    tb_writer.add_scalar(f"grads_after_warmup/level_{level}_min",  g.min().item(), iteration)
-                    tb_writer.add_scalar(f"grads_after_warmup/level_{level}_max",  g.max().item(), iteration)
-                    tb_writer.add_histogram(f"grads_after_warmup/level_{level}_hist", g, iteration)
+                    tb_writer.add_scalar(f"grads_after_warmup/level_{scene.cur_blur_level}_mean",
+                                        grad_mag.mean().item(), iteration)
+                    tb_writer.add_scalar(f"grads_after_warmup/level_{scene.cur_blur_level}_min",
+                                        grad_mag.min().item(), iteration)
+                    tb_writer.add_scalar(f"grads_after_warmup/level_{scene.cur_blur_level}_max",
+                                        grad_mag.max().item(), iteration)
+                    tb_writer.add_histogram(f"grads_after_warmup/level_{scene.cur_blur_level}_hist",
+                                            grad_mag, iteration)
 
-                    print(f"[LOGGED] Gradient stats saved for blur level {level} at iteration {iteration}")
+                    print(f"[LOGGED] Gradient stats saved for blur level {scene.cur_blur_level} at iteration {iteration}")
 
-                # Make sure we only log once per level
-                logged_levels.add(level)
+                    logged_levels.add(scene.cur_blur_level)
+
+
 
 
             if  scene.cur_blur_level!=0 and opt.use_opacity_reduce and iteration < opt.prune_until:
@@ -257,8 +276,16 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
                 gaussians.optimizer.step()
                 gaussians.optimizer.zero_grad(set_to_none = True)
 
-            if warm_up_iter is not 0:
-                warm_up_iter-=1
+           
+            # Trigger logging on the NEXT iteration after warm-up ends
+            if warm_up_iter > 0:
+                warm_up_iter -= 1
+
+            # When warm-up has *just finished*, schedule logging for next iteration
+            if warm_up_iter == 0 and (iteration not in logged_levels):
+                log_after_warmup = True
+
+
             if change_split_level_iter is not 0 and warm_up_iter is 0 and iteration > opt.update_from and iteration < opt.update_until:
                 change_split_level_iter-=1
                 if change_split_level_iter is 0:

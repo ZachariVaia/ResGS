@@ -85,7 +85,7 @@ class OptimizationParams(ParamGroup):
         self.percent_dense = 0.01
         self.lambda_dssim = 0.2
 
-        self.start_stat = 500
+        self.start_stat = 1
         self.update_from = 700
         self.update_interval = 100
         self.update_until = 12_000
