@@ -36,6 +36,7 @@ from time import time
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
+torch.manual_seed(0)
 # torch.set_num_threads(32)
 
 def savefiles(path):

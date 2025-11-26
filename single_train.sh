@@ -9,9 +9,9 @@ sudo chmod -R u+rwX /home/vaia/ResGS/output
 # ====================================================
 DATASET="/home/vaia/ResGS/data"
 OUTPUT="/home/vaia/ResGS/output"
-RUN_NAME="resgs_abs_tb_single_train/room"
+RUN_NAME="resgs_abs_tb_single_train_seed_0/bicycle"
 RUN_PATH="${OUTPUT}/${RUN_NAME}"
-IMAGE_MODE="images_2"
+IMAGE_MODE="images_4"
 
 # ====================================================
 # CREATE OUTPUT STRUCTURE
@@ -56,7 +56,7 @@ fi
 echo "[INFO] Starting TensorBoard on http://localhost:${TB_PORT} ..."
 
 docker run -d --rm --gpus all \
- --env CUDA_VISIBLE_DEVICES=2 \
+ --env CUDA_VISIBLE_DEVICES=0 \
   -p ${TB_PORT}:6006 \
   -v /home/vaia/ResGS:/app \
   resgs:latest \
@@ -75,11 +75,12 @@ echo
 echo "================ RUNNING TRAINING ================"
 
 docker run -it --rm --gpus all \
+ --env CUDA_VISIBLE_DEVICES=0 \
   -v /home/vaia/ResGS:/app \
   resgs:latest \
   bash -lc "python -u /app/train.py \
       --eval \
-      --source_path /app/data/MipNeRF/room \
+      --source_path /app/data/MipNeRF/bicycle \
       --images ${IMAGE_MODE} \
       --model_path /app/output/${RUN_NAME}"
 
@@ -91,6 +92,7 @@ echo
 echo "================ RUNNING RENDER ================"
 
 docker run -it --rm --gpus all \
+ --env CUDA_VISIBLE_DEVICES=0 \
   -v /home/vaia/ResGS:/app \
   resgs:latest \
   bash -lc "python -u /app/render.py \
@@ -105,6 +107,7 @@ echo
 echo "================ RUNNING METRICS ================"
 
 docker run -it --rm --gpus all \
+ --env CUDA_VISIBLE_DEVICES=0 \
   -v /home/vaia/ResGS:/app \
   resgs:latest \
   bash -lc "python -u /app/metrics.py \
