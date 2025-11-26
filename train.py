@@ -231,12 +231,10 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
             # Compute correct target_log_iter for each blur level
             if scene.cur_blur_level == 0:
                 target_log_iter = 1 + opt.warm_up_iter
-
-            elif scene.cur_blur_level < (len(change_iter ) + 1):
-                target_log_iter = change_iter[scene.cur_blur_level] + opt.warm_up_iter + 1
-
-            else:
-                target_log_iter = opt.update_until + opt.warm_up_iter + 1
+                
+            elif scene.cur_blur_level !=0 and  scene.cur_blur_level < (len(change_iter ) + 1):
+                target_log_iter = change_iter[scene.cur_blur_level - 1] + opt.warm_up_iter + 1
+                
 
 
             if iteration == target_log_iter:
