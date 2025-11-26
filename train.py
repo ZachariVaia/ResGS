@@ -220,14 +220,46 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
                 if hasattr(gaussians, "xyz_gradient_accum_abs"):
                     grad_mag = (gaussians.xyz_gradient_accum_abs / (gaussians.denom + 1e-8)).norm(dim=1)
 
-                    tb_writer.add_scalar(f"grads_after_warmup/resolution_{scene.cur_resolution}_mean",
-                                        grad_mag.mean().item(), iteration)
-                    tb_writer.add_scalar(f"grads_after_warmup/resolution_{scene.cur_resolution}_min",
-                                        grad_mag.min().item(), iteration)
-                    tb_writer.add_scalar(f"grads_after_warmup/resolution_{scene.cur_resolution}_max",
-                                        grad_mag.max().item(), iteration)
-                    tb_writer.add_histogram(f"grads_after_warmup/resolution_{scene.cur_resolution}_hist",
+                    # tb_writer.add_scalar(f"grads_after_warmup/resolution_{scene.cur_resolution}_mean",
+                    #                     grad_mag.mean().item(), iteration)
+                    # tb_writer.add_scalar(f"grads_after_warmup/resolution_{scene.cur_resolution}_min",
+                    #                     grad_mag.min().item(), iteration)
+                    # tb_writer.add_scalar(f"grads_after_warmup/resolution_{scene.cur_resolution}_max",
+                    #                     grad_mag.max().item(), iteration)
+                    # tb_writer.add_histogram(f"grads_after_warmup/resolution_{scene.cur_resolution}_hist",
+                    #                         grad_mag, iteration)
+                    # ------------------------------------------------------------
+                    #    LOG 3 GLOBAL PLOTS (mean, min, max) WITH ALL LEVELS
+                    # ------------------------------------------------------------
+
+                    mean_val = grad_mag.mean().item()
+                    min_val  = grad_mag.min().item()
+                    max_val  = grad_mag.max().item()
+
+                    level_id = f"res{scene.cur_resolution}"
+
+                    tb_writer.add_scalars(
+                        "grads_after_warmup/mean_all_levels",
+                        { level_id: mean_val },
+                        iteration
+                    )
+
+                    tb_writer.add_scalars(
+                        "grads_after_warmup/min_all_levels",
+                        { level_id: min_val },
+                        iteration
+                    )
+
+                    tb_writer.add_scalars(
+                        "grads_after_warmup/max_all_levels",
+                        { level_id: max_val },
+                        iteration
+                    )
+
+                    # (Optional histogram)
+                    tb_writer.add_histogram(f"grads_after_warmup/{level_id}_hist",
                                             grad_mag, iteration)
+
 
                     print(f"[LOGGED] Gradient stats saved for resolution level {scene.cur_resolution} at iteration {iteration}")
 
