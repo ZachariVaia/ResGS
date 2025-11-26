@@ -482,8 +482,8 @@ class GaussianModel:
 
     def adjust_gaussian(self, base_grad_threshold, update_value , min_opacity, cur_stage = 0, opacity_reduce_weight = 0.3, residual_split_scale_div = 1.6):
 
-        grads = self.xyz_gradient_accum_abs / self.denom
-        # grads = self.xyz_gradient_accum / self.denom
+        # grads = self.xyz_gradient_accum_abs / self.denom
+        grads = self.xyz_gradient_accum / self.denom
         grads[grads.isnan()] = 0
         grads_norm = torch.norm(grads, dim=-1)
     
