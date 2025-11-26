@@ -238,7 +238,7 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
                     print(f"[LOGGED] Gradient stats saved for blur level {level} at iteration {iteration}")
 
                 # Make sure we only log once per level
-                logged_levels.add(level)`
+                logged_levels.add(level)
 
 
             if  scene.cur_blur_level!=0 and opt.use_opacity_reduce and iteration < opt.prune_until:
