@@ -78,6 +78,12 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
     first_iter = 0
     lpips_fn = lpips.LPIPS(net='vgg').to("cuda")
     tb_writer = prepare_output_and_logger(dataset)
+    logged_levels = set()
+    logged_levels.add(-1)  # avoid logging at iter=0
+    log_after_warmup = False
+    warm_up_iter = opt.warm_up_iter
+
+
     gaussians = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians, shuffle=False, resolution_scales=opt.resolution_scales, resize_to_orig=opt.resize_to_original)
     gaussians.training_setup(opt)
@@ -195,6 +201,38 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
                 change_split_level_iter = get_change_split_iter(last_change_iter, next_change_iter, opt.stage_split)
                 viewpoint_stack = scene.getTrainCameras().copy()
                 scene.clear_image()
+
+            # ------------------------------------------------------------
+            #   LOG GRADIENTS WHEN WARM-UP FINISHES FOR EACH RESOLUTION
+            # ------------------------------------------------------------
+
+            # Compute correct logging iteration per resolution level
+            if scene.cur_resolution == 0:
+                target_log_iter = 1 + opt.warm_up_iter
+
+            elif scene.cur_resolution < len(change_iter) + 1:
+                target_log_iter = change_iter[scene.cur_resolution - 1] + opt.warm_up_iter + 1
+
+            # Perform logging when iteration matches the target
+            if iteration == target_log_iter and scene.cur_resolution not in logged_levels:
+                print(f"[DEBUG] iter={iteration}, target_log_iter={target_log_iter}, resolution={scene.cur_resolution}")
+
+                if hasattr(gaussians, "xyz_gradient_accum_abs"):
+                    grad_mag = (gaussians.xyz_gradient_accum_abs / (gaussians.denom + 1e-8)).norm(dim=1)
+
+                    tb_writer.add_scalar(f"grads_after_warmup/resolution_{scene.cur_resolution}_mean",
+                                        grad_mag.mean().item(), iteration)
+                    tb_writer.add_scalar(f"grads_after_warmup/resolution_{scene.cur_resolution}_min",
+                                        grad_mag.min().item(), iteration)
+                    tb_writer.add_scalar(f"grads_after_warmup/resolution_{scene.cur_resolution}_max",
+                                        grad_mag.max().item(), iteration)
+                    tb_writer.add_histogram(f"grads_after_warmup/resolution_{scene.cur_resolution}_hist",
+                                            grad_mag, iteration)
+
+                    print(f"[LOGGED] Gradient stats saved for resolution level {scene.cur_resolution} at iteration {iteration}")
+
+                    logged_levels.add(scene.cur_resolution)
+
 
             if  scene.cur_resolution!=0 and opt.use_opacity_reduce and iteration < opt.prune_until:
                 if iteration % opt.opacity_reduce_interval == 0:

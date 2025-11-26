@@ -9,7 +9,7 @@ sudo chmod -R u+rwX /home/vaia/ResGS/output
 # ====================================================
 DATASET="/home/vaia/ResGS/data"
 OUTPUT="/home/vaia/ResGS/output"
-RUN_NAME="resgs_abs_tb_single_train_seed_0/bicycle"
+RUN_NAME="resgs_abs_tb_single_train_grads/bonsai"
 RUN_PATH="${OUTPUT}/${RUN_NAME}"
 IMAGE_MODE="images_4"
 
@@ -80,7 +80,7 @@ docker run -it --rm --gpus all \
   resgs:latest \
   bash -lc "python -u /app/train.py \
       --eval \
-      --source_path /app/data/MipNeRF/bicycle \
+      --source_path /app/data/MipNeRF/bonsai \
       --images ${IMAGE_MODE} \
       --model_path /app/output/${RUN_NAME}"
 
