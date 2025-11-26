@@ -77,6 +77,8 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
     first_iter = 0
     lpips_fn = lpips.LPIPS(net='vgg').to("cuda")
     tb_writer = prepare_output_and_logger(dataset)
+    logged_levels = set() # Keep track of logged levels for gradient stats
+
     gaussians = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians, shuffle=False, blur_levels= opt.blur_levels, resolution_scales=[1.0], resize_to_orig=opt.resize_to_original)
     gaussians.training_setup(opt)
@@ -209,6 +211,34 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
                 change_split_level_iter = get_change_split_iter(last_change_iter, next_change_iter, opt.stage_split)
                 viewpoint_stack = scene.getTrainCameras().copy()
                 scene.clear_image()
+
+            # ------------------------------------------------------------
+            #   LOG GRADIENTS EXACTLY WHEN WARM-UP FINISHES FOR NEW LEVEL
+            # ------------------------------------------------------------
+            if warm_up_iter == 0 \
+                and scene.cur_blur_level not in logged_levels \
+                and hasattr(gaussians, "xyz_gradient_accum_abs"):
+
+                level = scene.cur_blur_level
+
+                # Gradient magnitude per Gaussian
+                grad_mag = (gaussians.xyz_gradient_accum_abs / (gaussians.denom + 1e-8)).norm(dim=1)
+
+                # If level assignment exists
+                mask = (gaussians.levels == level) if hasattr(gaussians, "levels") else None
+
+                if mask is not None and mask.sum() > 0:
+                    g = grad_mag[mask]
+
+                    tb_writer.add_scalar(f"grads_after_warmup/level_{level}_mean", g.mean().item(), iteration)
+                    tb_writer.add_scalar(f"grads_after_warmup/level_{level}_min",  g.min().item(), iteration)
+                    tb_writer.add_scalar(f"grads_after_warmup/level_{level}_max",  g.max().item(), iteration)
+                    tb_writer.add_histogram(f"grads_after_warmup/level_{level}_hist", g, iteration)
+
+                    print(f"[LOGGED] Gradient stats saved for blur level {level} at iteration {iteration}")
+
+                # Make sure we only log once per level
+                logged_levels.add(level)`
 
 
             if  scene.cur_blur_level!=0 and opt.use_opacity_reduce and iteration < opt.prune_until:
