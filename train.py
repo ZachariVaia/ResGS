@@ -287,7 +287,7 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
 
             # Compute when warm-up finishes
             if hasattr(scene, "last_enter_iter"):
-                target_log_iter = scene.last_enter_iter + opt.warm_up_iter + 1
+                target_log_iter = scene.last_enter_iter + opt.warm_up_iter + 99 # +1
             else:
                 target_log_iter = None
 
