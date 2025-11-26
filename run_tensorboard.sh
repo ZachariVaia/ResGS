@@ -1,7 +1,7 @@
 # #!/bin/bash
 
 # Path to logs INSIDE the container (must start with /app)
-LOGDIR=/app/output/blurgs_opencv_25_13_2500_6000_abs_tb_full_eval/default/MipNeRF/garden/tb
+LOGDIR=/app/output/blur_gs_opencv_25_13_2500_6000_abs_tb_full_eval_last/default/MipNeRF/bicycle/tb
 
 # LOGDIR=/app/output/blur_gs_2500_6000_abss_full_eval/default/MipNeRF/flowers/tb
 # LOGDIR=/app/output/multires_2500_6000_abss_full_eval/default/MipNeRF/flowers/tb
