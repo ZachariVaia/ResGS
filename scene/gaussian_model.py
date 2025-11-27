@@ -488,10 +488,10 @@ class GaussianModel:
         grads_norm = torch.norm(grads, dim=-1)
     
         cur_grad_thresh = torch.ones((grads_norm.shape[0]),device="cuda").float() * base_grad_threshold
-        if cur_stage is not -1:
-            level_mask = (self._level < cur_stage)
-            base_pow = torch.ones((grads_norm[level_mask].shape[0]),device="cuda").float() * update_value
-            cur_grad_thresh[level_mask] = cur_grad_thresh[level_mask] * torch.pow(base_pow, self._level[level_mask] - cur_stage)
+        # if cur_stage is not -1:
+        #     level_mask = (self._level < cur_stage)
+        #     base_pow = torch.ones((grads_norm[level_mask].shape[0]),device="cuda").float() * update_value
+        #     cur_grad_thresh[level_mask] = cur_grad_thresh[level_mask] * torch.pow(base_pow, self._level[level_mask] - cur_stage)
         add_child_mask = (grads_norm >= cur_grad_thresh)
 
         new_splits = self.densify_residual_split(add_child_mask, opacity_reduce_weight = opacity_reduce_weight, residual_split_scale_div = residual_split_scale_div)

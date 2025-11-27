@@ -208,10 +208,10 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
 
             # Compute correct logging iteration per resolution level
             if scene.cur_resolution == 0:
-                target_log_iter =  opt.warm_up_iter + 1  # +1
+                target_log_iter =  opt.warm_up_iter + 99  # +1
 
             elif scene.cur_resolution < len(change_iter) + 1:
-                target_log_iter = change_iter[scene.cur_resolution - 1] + opt.warm_up_iter + 1 # +1
+                target_log_iter = change_iter[scene.cur_resolution - 1] + opt.warm_up_iter + 99 # +1
 
             # Perform logging when iteration matches the target
             if iteration == target_log_iter and scene.cur_resolution not in logged_levels:

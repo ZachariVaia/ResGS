@@ -9,7 +9,7 @@ sudo chmod -R u+rwX /home/vaia/ResGS/output
 # ====================================================
 DATASET="/home/vaia/ResGS/data"
 OUTPUT="/home/vaia/ResGS/output"
-RUN_NAME="resgs_abs_tb_single_train_grads_total_501/bonsai"
+RUN_NAME="resgs_abs_tb_single_train_grads_total_599_fixed_thresh/bonsai"
 RUN_PATH="${OUTPUT}/${RUN_NAME}"
 IMAGE_MODE="images_2"
 

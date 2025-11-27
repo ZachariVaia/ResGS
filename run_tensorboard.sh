@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Path to logs INSIDE the container (must start with /app)
-LOGDIR=/app/output/resgs_abs_tb_single_train_grads/bonsai/tb
+LOGDIR=/app/output/multi_res_scale_opencv_7_5_abs_tb_2500_6000_until_16000_single_train_grads_599_fixed_thres/bonsai/tb
 
 
 
