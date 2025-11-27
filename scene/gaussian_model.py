@@ -486,14 +486,30 @@ class GaussianModel:
         # grads = self.xyz_gradient_accum / self.denom
         grads[grads.isnan()] = 0
         grads_norm = torch.norm(grads, dim=-1)
+
     
         cur_grad_thresh = torch.ones((grads_norm.shape[0]),device="cuda").float() * base_grad_threshold
-        # if cur_stage is not -1:
-        #     level_mask = (self._level < cur_stage)
-        #     base_pow = torch.ones((grads_norm[level_mask].shape[0]),device="cuda").float() * update_value
-        #     cur_grad_thresh[level_mask] = cur_grad_thresh[level_mask] * torch.pow(base_pow, self._level[level_mask] - cur_stage)
-        add_child_mask = (grads_norm >= cur_grad_thresh)
+        # # Compute blur sigma based on substage (1..9)
+        # stage_mod = cur_stage % 3
 
+        # if stage_mod == 0:
+        #     blur_sigma = 2.0      # heavy blur
+        # elif stage_mod == 1:
+        #     blur_sigma = 1.0      # mid blur
+        # else:  # stage_mod == 2
+        #     blur_sigma = 0.0      # no blur
+
+
+
+        if cur_stage is not -1:
+            level_mask = (self._level < cur_stage)
+            base_pow = torch.ones((grads_norm[level_mask].shape[0]),device="cuda").float() * update_value
+            cur_grad_thresh[level_mask] = cur_grad_thresh[level_mask] * torch.pow(base_pow, self._level[level_mask] - cur_stage)
+            
+
+        # blur_factor = 1.0 + 0.5 * blur_sigma
+        # cur_grad_thresh *= blur_factor
+        add_child_mask = (grads_norm >= cur_grad_thresh)
         new_splits = self.densify_residual_split(add_child_mask, opacity_reduce_weight = opacity_reduce_weight, residual_split_scale_div = residual_split_scale_div)
         
         prune_pts_mask = torch.where(self.get_opacity < min_opacity, True, False)
