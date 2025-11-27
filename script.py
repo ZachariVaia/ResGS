@@ -30,21 +30,22 @@ parser.add_argument("--args", type=str, default="")
 parser.add_argument("--dataset", type=str, default="")
 parser.add_argument("--eval", action="store_true")
 parser.add_argument("--save_path", type=str,default="trained/")
-parser.add_argument("--dataset_path", type=str,default="data/MipNeRF/")
+parser.add_argument("--dataset_path", type=str,default="data/")
 args = parser.parse_args(sys.argv[1:])
 base_save_path=args.save_path
 base_dataset_path=args.dataset_path
 
-if args.dataset=="tt" or args.dataset=="":
-    run_script(os.path.join(base_dataset_path,"tandt"), os.path.join(base_save_path, args.name, "tandt"), args.name, args.device, args.args)
-    if args.eval:
-        os.system(f"python script_eval.py --device {args.device} --name {args.name} --save_path {args.save_path} --dataset_path {args.dataset_path} --dataset tt")
+# if args.dataset=="tt" or args.dataset=="":
+#     run_script(os.path.join(base_dataset_path,"tandt"), os.path.join(base_save_path, args.name, "tandt"), args.name, args.device, args.args)
+#     if args.eval:
+#         os.system(f"python script_eval.py --device {args.device} --name {args.name} --save_path {args.save_path} --dataset_path {args.dataset_path} --dataset tt")
 
 if args.dataset=="db" or args.dataset=="":
+    run_script(os.path.join(base_dataset_path,"db"), os.path.join(base_save_path, args.name, "db"), args.name, args.device, args.args)
     if args.eval:
         os.system(f"python script_eval.py --device {args.device} --name {args.name} --save_path {args.save_path} --dataset_path {args.dataset_path} --dataset db")
 
-if args.dataset=="mip" or args.dataset=="":
-    run_script(os.path.join(base_dataset_path,"MipNeRF"), os.path.join(base_save_path, args.name, "MipNeRF"), args.name, args.device, args.args)
-    if args.eval:
-        os.system(f"python script_eval.py --device {args.device} --name {args.name} --save_path {args.save_path} --dataset_path {args.dataset_path} --dataset mip")
+# if args.dataset=="mip" or args.dataset=="":
+#     run_script(os.path.join(base_dataset_path,"MipNeRF"), os.path.join(base_save_path, args.name, "MipNeRF"), args.name, args.device, args.args)
+#     if args.eval:
+#         os.system(f"python script_eval.py --device {args.device} --name {args.name} --save_path {args.save_path} --dataset_path {args.dataset_path} --dataset mip")

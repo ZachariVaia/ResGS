@@ -90,11 +90,11 @@ def loadCam(args, id, cam_info, resolution_scales, blur_levels, resize_to_origin
                 # Apply blur for each blur level
                 for j in range(len(blur_levels)):
                     if j == 2:
-                        sigma =6.0
-                        kernel_size =25 # Larger kernel for the first level
+                        sigma =2.0
+                        kernel_size =7 # Larger kernel for the first level
                     elif j == 1:
-                        sigma = 4.0
-                        kernel_size = 13
+                        sigma = 1.0
+                        kernel_size = 5
                     elif j == 0:
                         blurred_image = torch.from_numpy(image).permute(2, 0, 1).float()  # No blur for this level
                     else:
@@ -115,11 +115,11 @@ def loadCam(args, id, cam_info, resolution_scales, blur_levels, resize_to_origin
                 # Apply blur for each blur level
                 for j in range(len(blur_levels)):
                     if j == 2:
-                        sigma = 6.0
-                        kernel_size = 25  # Larger kernel for the first level
+                        sigma = 2.0
+                        kernel_size = 7  # Larger kernel for the first level
                     elif j == 1:
-                        sigma = 4.0
-                        kernel_size = 13
+                        sigma =1.0
+                        kernel_size = 5
 
                     elif j == 0:
                         blurred_image = torch.from_numpy(downed_image).permute(2, 0, 1).float()  # No blur for this level

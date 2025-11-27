@@ -274,12 +274,44 @@ def training(dataset, opt:OptimizationParams, pipe, testing_iterations, saving_i
                 viewpoint_stack = scene.getTrainCameras_pyramid_level().copy()
                 scene.clear_pyramid_level_image()
             # ------------------------------------------------------------
+            #  SPECIAL CASE: LOG FIRST WARM-UP (LEVEL 0, RES 0)
+            # ------------------------------------------------------------
+            if scene.cur_pyramid_level == 0 and scene.cur_resolution == 0:
+
+                first_target = opt.warm_up_iter + 99  # e.g. 599
+
+                if iteration == first_target:
+                    level_id = "pyr0_res0"
+
+                    if not hasattr(scene, "logged_levels"):
+                        scene.logged_levels = set()
+
+                    if level_id not in scene.logged_levels:
+                        print(f"[DEBUG] Logging FIRST warm-up at iter={iteration}, level={level_id}")
+
+                        grad_mag = (gaussians.xyz_gradient_accum_abs /
+                                    (gaussians.denom + 1e-8)).norm(dim=1)
+
+                        tb_writer.add_scalars("grads_after_warmup/mean_all_levels",
+                            { level_id: grad_mag.mean().item() }, iteration)
+
+                        tb_writer.add_scalars("grads_after_warmup/min_all_levels",
+                            { level_id: grad_mag.min().item() }, iteration)
+
+                        tb_writer.add_scalars("grads_after_warmup/max_all_levels",
+                            { level_id: grad_mag.max().item() }, iteration)
+
+                        scene.logged_levels.add(level_id)
+
+                        
+            # ------------------------------------------------------------
             #   GRADIENT LOGGING AFTER WARM-UP FOR EACH PYRAMID+RES LEVEL
             # ------------------------------------------------------------
-
+            
             # Create the logging registry once
             if not hasattr(scene, "logged_levels"):
                 scene.logged_levels = set()
+
 
             # Detect level change moment
             if iteration in change_pyramid_level:
