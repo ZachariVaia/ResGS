@@ -9,9 +9,9 @@ sudo chmod -R u+rwX /home/vaia/ResGS/output
 # ====================================================
 DATASET="/home/vaia/ResGS/data"
 OUTPUT="/home/vaia/ResGS/output"
-RUN_NAME="resgs_abs_tb_single_train_grads_total_599_fixed_thresh/bonsai"
+RUN_NAME="resgs_abs_tb_single_train_grads_test_visualization/apple"
 RUN_PATH="${OUTPUT}/${RUN_NAME}"
-IMAGE_MODE="images_2"
+IMAGE_MODE="images"
 
 # ====================================================
 # CREATE OUTPUT STRUCTURE
@@ -80,7 +80,7 @@ docker run -it --rm --gpus all \
   resgs:latest \
   bash -lc "python -u /app/train.py \
       --eval \
-      --source_path /app/data/MipNeRF/bonsai \
+      --source_path /app/data/apple/apple_masked \
       --images ${IMAGE_MODE} \
       --model_path /app/output/${RUN_NAME}"
 
