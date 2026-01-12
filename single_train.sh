@@ -9,7 +9,7 @@ sudo chmod -R u+rwX /home/vaia/ResGS/output
 # ====================================================
 DATASET="/home/vaia/ResGS/data"
 OUTPUT="/home/vaia/ResGS/output"
-RUN_NAME="resgs_3dgs_tb_single_train/plant"
+RUN_NAME="resgs_abgs_tb_single_train/plant"
 RUN_PATH="${OUTPUT}/${RUN_NAME}"
 IMAGE_MODE="images"
 
