@@ -9,7 +9,7 @@ sudo chmod -R u+rwX /home/vaia/ResGS/output
 # ====================================================
 DATASET="/home/vaia/ResGS/data"
 OUTPUT="/home/vaia/ResGS/output"
-RUN_NAME="resgs_abs_tb_single_train_grads_test_visualization/apple"
+RUN_NAME="resgs_3dgs_tb_single_train/plant"
 RUN_PATH="${OUTPUT}/${RUN_NAME}"
 IMAGE_MODE="images"
 
@@ -80,7 +80,7 @@ docker run -it --rm --gpus all \
   resgs:latest \
   bash -lc "python -u /app/train.py \
       --eval \
-      --source_path /app/data/apple/apple_masked \
+      --source_path /app/data/plant/white_bg_keep_2_drop_1 \
       --images ${IMAGE_MODE} \
       --model_path /app/output/${RUN_NAME}"
 
